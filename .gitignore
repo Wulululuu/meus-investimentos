@@ -1,0 +1,12 @@
+# Dados pessoais e segredos — NUNCA devem ir para o repositório
+investimentos.db
+investimentos.db-*
+config.env
+backups/
+exports/
+*.log
+
+__pycache__/
+*.pyc
+.venv/
+venv/

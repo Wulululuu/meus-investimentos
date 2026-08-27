@@ -1,0 +1,328 @@
+:root {
+  --bg: #0f1420;
+  --bg-card: #171e2e;
+  --border: #2a3348;
+  --text: #e8ecf4;
+  --text-muted: #8b95ab;
+  --accent: #4f7cff;
+  --verde: #2ecc71;
+  --vermelho: #e74c3c;
+  font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  margin: 0;
+  padding: 24px 32px 48px;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+h1 { font-size: 22px; margin: 0; }
+
+.header-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+button#btn-sair { background: transparent; border: 1px solid var(--border); color: var(--text-muted); }
+button#btn-sair:hover { color: var(--vermelho); border-color: var(--vermelho); }
+
+.tela-login {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+  z-index: 100;
+  padding: 20px;
+}
+.login-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 32px;
+  width: min(360px, 100%);
+}
+.login-card h1 { font-size: 20px; margin: 0 0 20px; text-align: center; }
+.login-card button[type="submit"] { margin-top: 4px; }
+
+.botoes-movimentacao {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+button#btn-registrar-saida { background: #2a3348; }
+
+.muted { color: var(--text-muted); font-size: 13px; }
+
+button {
+  background: var(--accent);
+  color: white;
+  border: none;
+  padding: 9px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+}
+button:hover { filter: brightness(1.1); }
+button#btn-atualizar, button#btn-exportar { background: #2a3348; }
+
+.abas {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.aba-btn {
+  background: transparent;
+  color: var(--text-muted);
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  padding: 10px 4px;
+  margin-right: 20px;
+  font-size: 14px;
+  font-weight: 500;
+}
+.aba-btn:hover { color: var(--text); }
+.aba-btn.ativa { color: var(--text); border-bottom-color: var(--accent); }
+
+.compras-subtitulo { font-size: 14px; margin: 24px 0 4px; }
+
+.tabela-scroll { overflow-x: hidden; margin-top: 12px; }
+.tabela-scroll table { table-layout: fixed; }
+.tabela-scroll th:nth-last-child(-n+2), .tabela-scroll td:nth-last-child(-n+2) {
+  padding-left: 4px;
+  padding-right: 4px;
+  width: 30px;
+}
+
+.badge-tipo {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.badge-compra { background: rgba(46,204,113,0.15); color: var(--verde); }
+.badge-venda { background: rgba(231,76,60,0.15); color: var(--vermelho); }
+
+.grafico-cheio { margin-bottom: 14px; }
+
+.linha-duas-colunas {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.grafico-card h2, .meta-renda-card h2 {
+  font-size: 14px;
+  margin: 0 0 12px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.grafico-card { height: 260px; display: flex; flex-direction: column; }
+.grafico-card canvas { flex: 1; min-height: 0; max-width: 100%; }
+.aviso-carregamento {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 0 12px;
+}
+
+.grafico-cheio { height: 280px; }
+
+.linha-duas-colunas { height: 260px; grid-template-rows: 1fr; }
+.linha-duas-colunas .card { height: 100%; min-height: 0; overflow: auto; }
+
+.meta-renda-card .valor-atual { font-size: 20px; font-weight: 600; margin-bottom: 4px; }
+.meta-renda-card .meta-sub { color: var(--text-muted); font-size: 12.5px; margin-bottom: 10px; }
+
+.barra-progresso {
+  background: #0f1420;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  height: 10px;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+.barra-progresso-preenchimento {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+.barra-progresso-preenchimento.completa { background: var(--verde); }
+
+#form-meta-renda { margin-top: 4px; gap: 8px; }
+#form-meta-renda label { font-size: 12px; }
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 14px;
+  margin-bottom: 24px;
+}
+
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px 18px;
+}
+
+.card .rotulo { color: var(--text-muted); font-size: 13px; margin-bottom: 6px; }
+.card .valor { font-size: 22px; font-weight: 600; }
+
+.positivo { color: var(--verde); }
+.negativo { color: var(--vermelho); }
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--bg-card);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+th, td {
+  padding: 12px 14px;
+  text-align: right;
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+}
+
+th:first-child, td:first-child { text-align: left; }
+
+th { color: var(--text-muted); font-weight: 500; font-size: 12px; text-transform: uppercase; }
+
+tbody tr { cursor: pointer; }
+tbody tr:hover { background: #1d2536; }
+
+.ticker-nome { font-weight: 600; }
+.ticker-sub { color: var(--text-muted); font-size: 12px; }
+
+.btn-remover {
+  background: transparent;
+  color: var(--text-muted);
+  padding: 4px 8px;
+  font-size: 16px;
+}
+.btn-remover:hover { color: var(--vermelho); }
+
+.btn-compras {
+  background: #1d2536;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  padding: 6px 10px;
+  font-size: 12px;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+.btn-compras:hover { color: var(--text); border-color: var(--accent); }
+
+.btn-editar {
+  background: transparent;
+  color: var(--text-muted);
+  padding: 4px 8px;
+  font-size: 13px;
+}
+.btn-editar:hover { color: var(--accent); }
+
+.lote-edicao input {
+  width: 90px;
+  padding: 5px 6px;
+  font-size: 13px;
+}
+.lote-edicao .acoes-edicao { display: flex; gap: 4px; justify-content: flex-end; }
+.lote-edicao .btn-salvar-lote { padding: 5px 10px; font-size: 12px; }
+.lote-edicao .btn-cancelar-lote {
+  padding: 5px 10px; font-size: 12px; background: #2a3348; color: var(--text);
+}
+
+.modal {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.6);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 50;
+}
+.modal.oculto { display: none; }
+
+.modal-conteudo {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 24px;
+  width: min(560px, 92vw);
+  max-height: 85vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  position: relative;
+}
+
+.modal-conteudo-largo { width: min(700px, 94vw); }
+
+.fechar {
+  position: absolute; top: 12px; right: 12px;
+  background: transparent; font-size: 20px; padding: 4px 10px;
+}
+
+form { display: flex; flex-direction: column; gap: 14px; margin-top: 12px; }
+label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--text-muted); }
+input, select {
+  background: #0f1420;
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 9px 10px;
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+.erro { color: var(--vermelho); font-size: 13px; }
+.oculto { display: none; }
+
+/* ---------- Celular ---------- */
+@media (max-width: 640px) {
+  body { padding: 16px 14px 32px; }
+
+  header { flex-direction: column; align-items: stretch; }
+  .header-actions { justify-content: stretch; }
+  .header-actions button, .botoes-movimentacao { flex: 1; }
+  h1 { font-size: 19px; text-align: center; margin-bottom: 4px; }
+
+  .abas { overflow-x: auto; white-space: nowrap; }
+
+  main { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  #tabela-investimentos { min-width: 720px; }
+
+  .linha-duas-colunas {
+    grid-template-columns: 1fr;
+    height: auto;
+  }
+  .linha-duas-colunas .card { height: auto; }
+  .grafico-cheio { height: 220px; }
+  .linha-duas-colunas .grafico-card { height: 220px; }
+
+  .modal-conteudo, .modal-conteudo-largo { width: 100vw; max-height: 100vh; height: 100%; border-radius: 0; padding: 20px 16px; }
+  .modal { padding: 0; }
+
+  .login-card { padding: 24px 20px; }
+
+  /* evita zoom automático do iOS Safari ao focar um campo (exige >=16px) */
+  input, select { font-size: 16px; }
+}

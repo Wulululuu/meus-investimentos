@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+<title>Meus Investimentos</title>
+<link rel="stylesheet" href="/static/style.css" />
+<link rel="manifest" href="/static/manifest.json" />
+<meta name="theme-color" content="#0f1420" />
+<link rel="apple-touch-icon" href="/static/icons/icon-192.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+<div id="tela-login" class="tela-login oculto">
+  <div class="login-card">
+    <h1>Meus Investimentos</h1>
+    <form id="form-login">
+      <label>Usuário
+        <input type="text" name="username" required autocomplete="username" />
+      </label>
+      <label>Senha
+        <input type="password" name="senha" required autocomplete="current-password" minlength="4" />
+      </label>
+      <button type="submit" id="btn-login-submit">Entrar</button>
+      <p id="login-config-aviso" class="muted oculto">Primeira vez aqui — essa tela vai criar sua conta.</p>
+      <p id="login-erro" class="erro oculto"></p>
+    </form>
+  </div>
+</div>
+
+<div id="app-conteudo" class="oculto">
+
+<header>
+  <h1>Meus Investimentos</h1>
+  <div class="header-actions">
+    <span id="ultima-atualizacao" class="muted"></span>
+    <button id="btn-exportar">Exportar para Excel</button>
+    <button id="btn-atualizar">Atualizar agora</button>
+    <div class="botoes-movimentacao">
+      <button id="btn-registrar-entrada">Registrar entrada</button>
+      <button id="btn-registrar-saida">Registrar saída</button>
+    </div>
+    <button id="btn-sair" title="Sair da conta">Sair</button>
+  </div>
+</header>
+
+<nav class="abas">
+  <button class="aba-btn ativa" data-aba="carteira">Minha Carteira</button>
+  <button class="aba-btn" data-aba="patrimonio">Patrimônio</button>
+</nav>
+
+<section id="aba-carteira">
+  <section id="resumo-geral" class="cards"></section>
+
+  <main>
+    <table id="tabela-investimentos">
+      <thead>
+        <tr>
+          <th>Ativo</th>
+          <th>Qtd.</th>
+          <th>Preço médio</th>
+          <th>Preço atual</th>
+          <th>Valor investido</th>
+          <th>Valorização</th>
+          <th>Proventos recebidos</th>
+          <th>A receber (mês)</th>
+          <th>Saldo total</th>
+        </tr>
+      </thead>
+      <tbody id="tabela-corpo"></tbody>
+    </table>
+  </main>
+</section>
+
+<section id="aba-patrimonio" class="oculto">
+  <div class="card grafico-card grafico-cheio">
+    <h2>Evolução do patrimônio</h2>
+    <canvas id="patrimonio-canvas" height="100"></canvas>
+  </div>
+  <div class="linha-duas-colunas">
+    <div class="card grafico-card">
+      <h2>Alocação por tipo</h2>
+      <canvas id="alocacao-canvas"></canvas>
+    </div>
+    <div class="card meta-renda-card">
+      <h2>Meta de renda passiva</h2>
+      <div id="meta-renda-conteudo"></div>
+      <form id="form-meta-renda">
+        <label>Meta mensal (R$)
+          <input type="number" name="valor" step="any" min="1" placeholder="ex: 2000" />
+        </label>
+        <button type="submit">Salvar meta</button>
+      </form>
+    </div>
+  </div>
+</section>
+
+<div id="modal-grafico" class="modal oculto">
+  <div class="modal-conteudo modal-conteudo-largo">
+    <button class="fechar" data-fechar>&times;</button>
+    <h2 id="grafico-titulo"></h2>
+    <canvas id="grafico-canvas" height="120"></canvas>
+
+    <h3 class="compras-subtitulo">Histórico de movimentação</h3>
+    <p class="muted">Compras em datas diferentes são somadas automaticamente no item consolidado
+      (use "Registrar entrada" com o mesmo ticker para adicionar outra). Vendas ficam registradas
+      aqui só como histórico — <strong>não alteram</strong> a quantidade, valorização nem o saldo
+      mostrados no resto do app.</p>
+
+    <div class="tabela-scroll">
+      <table>
+        <thead>
+          <tr><th>Tipo</th><th>Data</th><th>Quantidade</th><th>Preço</th><th>Valor total</th><th></th><th></th></tr>
+        </thead>
+        <tbody id="compras-corpo"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div id="modal-novo" class="modal oculto">
+  <div class="modal-conteudo">
+    <button class="fechar" data-fechar>&times;</button>
+    <h2>Registrar entrada</h2>
+    <form id="form-novo">
+      <label>Ticker (ex: PETR4, HGLG11)
+        <input type="text" name="ticker" required maxlength="10" />
+      </label>
+      <label>Tipo
+        <select name="tipo" required>
+          <option value="Ação">Ação</option>
+          <option value="FII">FII</option>
+          <option value="ETF">ETF</option>
+          <option value="BDR">BDR</option>
+        </select>
+      </label>
+      <label>Quantidade
+        <input type="number" name="quantidade" step="any" min="0.000001" required />
+      </label>
+      <label>Preço médio de compra (R$)
+        <input type="number" name="preco_medio_compra" step="any" min="0.01" required />
+      </label>
+      <label>Data da compra
+        <input type="date" name="data_compra" required />
+      </label>
+      <button type="submit">Adicionar</button>
+      <p id="form-erro" class="erro oculto"></p>
+    </form>
+  </div>
+</div>
+
+<div id="modal-saida" class="modal oculto">
+  <div class="modal-conteudo">
+    <button class="fechar" data-fechar>&times;</button>
+    <h2>Registrar saída</h2>
+    <p class="muted">Fica só como histórico — <strong>não altera</strong> a quantidade, valorização
+      nem o saldo total mostrados no resto do app.</p>
+    <form id="form-saida">
+      <label>Ticker (ex: PETR4, HGLG11)
+        <input type="text" name="ticker" required maxlength="10" />
+      </label>
+      <label>Quantidade
+        <input type="number" name="quantidade" step="any" min="0.000001" required />
+      </label>
+      <label>Preço unitário (R$)
+        <input type="number" name="preco_unitario" step="any" min="0.01" required />
+      </label>
+      <label>Data da saída
+        <input type="date" name="data_venda" required />
+      </label>
+      <button type="submit">Registrar</button>
+      <p id="form-saida-erro" class="erro oculto"></p>
+    </form>
+  </div>
+</div>
+
+</div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

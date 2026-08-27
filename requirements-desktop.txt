@@ -1,0 +1,6 @@
+# Dependências extras só para rodar o app como janela desktop no Windows.
+# O servidor hospedado (Render) usa apenas requirements.txt — pywebview
+# precisa de bibliotecas gráficas que não existem (e não são necessárias)
+# num servidor Linux sem interface gráfica.
+-r requirements.txt
+pywebview==5.3.2
