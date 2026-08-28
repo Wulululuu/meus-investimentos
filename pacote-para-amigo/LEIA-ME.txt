@@ -1,0 +1,24 @@
+Como instalar o "Meus Investimentos" no seu computador (Windows)
+==================================================================
+
+1. Instale o Python (só uma vez, se ainda não tiver):
+   - Acesse https://www.python.org/downloads/
+   - Baixe e abra o instalador
+   - IMPORTANTE: marque a caixinha "Add python.exe to PATH" antes de
+     clicar em Install
+
+2. Depois de instalado, abra o menu Iniciar, digite "PowerShell" e abra o
+   Windows PowerShell. Cole este comando e aperte Enter:
+
+   pip install pywebview
+
+3. Copie esta pasta inteira ("pacote-para-amigo") para onde quiser no seu
+   computador (ex: Área de Trabalho, Documentos).
+
+4. Dentro dela, dê duplo clique em "Abrir Meus Investimentos.bat".
+
+5. Na tela que abrir, clique em "Criar conta nova" e escolha seu próprio
+   usuário e senha — sua carteira começa vazia, separada da de qualquer
+   outra pessoa que use o mesmo app.
+
+Pronto! Da próxima vez, é só dar duplo clique no mesmo atalho.

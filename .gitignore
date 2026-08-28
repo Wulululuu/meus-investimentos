@@ -10,3 +10,6 @@ __pycache__/
 *.pyc
 .venv/
 venv/
+
+# arquivo gerado, não precisa versionar
+pacote-para-amigo.zip
