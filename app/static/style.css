@@ -78,7 +78,7 @@ button {
   font-weight: 500;
 }
 button:hover { filter: brightness(1.1); }
-button#btn-atualizar, button#btn-exportar { background: #2a3348; }
+button#btn-atualizar, button#btn-exportar, button#btn-instalar-app { background: #2a3348; }
 
 .abas {
   display: flex;
@@ -284,6 +284,12 @@ tbody tr:hover { background: #1d2536; }
   position: absolute; top: 12px; right: 12px;
   background: transparent; font-size: 20px; padding: 4px 10px;
 }
+
+.instalar-secao { padding: 14px 0; border-top: 1px solid var(--border); }
+.instalar-secao:first-of-type { border-top: none; padding-top: 4px; }
+.instalar-secao h3 { margin-bottom: 6px; }
+.instalar-secao p.muted { margin-bottom: 10px; }
+.instalar-secao a { text-decoration: none; display: inline-block; }
 
 form { display: flex; flex-direction: column; gap: 14px; margin-top: 12px; }
 label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--text-muted); }

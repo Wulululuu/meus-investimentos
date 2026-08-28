@@ -18,6 +18,12 @@ let graficoAtual = null;
 let graficoPatrimonio = null;
 let graficoAlocacao = null;
 
+let promptInstalacaoPWA = null;
+window.addEventListener("beforeinstallprompt", (ev) => {
+  ev.preventDefault();
+  promptInstalacaoPWA = ev;
+});
+
 async function carregarInvestimentos() {
   const resp = await fetch("/api/investimentos");
   const investimentos = await resp.json();
@@ -410,6 +416,29 @@ document.getElementById("btn-registrar-entrada").addEventListener("click", () =>
 
 document.getElementById("btn-registrar-saida").addEventListener("click", () => {
   document.getElementById("modal-saida").classList.remove("oculto");
+});
+
+document.getElementById("btn-instalar-app").addEventListener("click", () => {
+  document.getElementById("modal-instalar").classList.remove("oculto");
+});
+
+document.getElementById("btn-instalar-celular").addEventListener("click", async () => {
+  const instrucoesEl = document.getElementById("instalar-celular-instrucoes");
+  if (promptInstalacaoPWA) {
+    promptInstalacaoPWA.prompt();
+    const { outcome } = await promptInstalacaoPWA.userChoice;
+    promptInstalacaoPWA = null;
+    if (outcome === "accepted") {
+      instrucoesEl.textContent = "Instalado! Procure o atalho na tela inicial do celular.";
+      instrucoesEl.classList.remove("oculto");
+    }
+    return;
+  }
+  const iOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  instrucoesEl.textContent = iOS
+    ? 'No Safari, toque no ícone de compartilhar (o quadrado com a seta pra cima) e depois em "Adicionar à Tela de Início".'
+    : 'Abra o menu do navegador (⋮ ou ≡) e escolha "Instalar app" ou "Adicionar à tela inicial".';
+  instrucoesEl.classList.remove("oculto");
 });
 
 document.querySelectorAll("[data-fechar]").forEach((btn) => {

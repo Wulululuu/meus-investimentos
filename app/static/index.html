@@ -42,6 +42,7 @@
   <h1>Meus Investimentos</h1>
   <div class="header-actions">
     <span id="ultima-atualizacao" class="muted"></span>
+    <button id="btn-instalar-app">Instalar app</button>
     <button id="btn-exportar">Exportar para Excel</button>
     <button id="btn-atualizar">Atualizar agora</button>
     <div class="botoes-movimentacao">
@@ -123,6 +124,31 @@
         </thead>
         <tbody id="compras-corpo"></tbody>
       </table>
+    </div>
+  </div>
+</div>
+
+<div id="modal-instalar" class="modal oculto">
+  <div class="modal-conteudo">
+    <button class="fechar" data-fechar>&times;</button>
+    <h2>Instalar o app</h2>
+
+    <div class="instalar-secao">
+      <h3>Celular</h3>
+      <p class="muted">Instala um atalho na tela inicial — abre em tela cheia, sem barra do
+        navegador, e os dados ficam sincronizados com o computador.</p>
+      <button id="btn-instalar-celular" type="button">Instalar no celular</button>
+      <p id="instalar-celular-instrucoes" class="muted oculto"></p>
+    </div>
+
+    <div class="instalar-secao">
+      <h3>Computador (Windows)</h3>
+      <p class="muted">Baixa um instalador que abre o app numa janela própria, fora do
+        navegador. Se ainda não tiver Python, ele instala sozinho — pode levar 1-2 minutos
+        na primeira vez.</p>
+      <a id="btn-instalar-windows" href="/static/downloads/Instalar-e-Abrir.bat" download="Instalar e Abrir.bat">
+        <button type="button">Baixar para Windows</button>
+      </a>
     </div>
   </div>
 </div>
