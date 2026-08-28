@@ -23,7 +23,8 @@ ICONES_DIR = RAIZ / "app" / "static" / "icons"
 ICONES_DIR.mkdir(parents=True, exist_ok=True)
 
 FONTE = Path(__file__).resolve().parent / "assets" / "logo_fonte.jpeg"
-BG = (15, 20, 32, 255)  # --bg do app
+BG_TRANSPARENTE = (0, 0, 0, 0)
+BG_SOLIDO = (15, 20, 32, 255)  # --bg do app — so' usado no icone maskable
 
 
 def _remover_fundo_xadrez(im: Image.Image) -> Image.Image:
@@ -52,8 +53,8 @@ def _remover_fundo_xadrez(im: Image.Image) -> Image.Image:
     return Image.fromarray(np.dstack([arr, alpha]).astype(np.uint8), mode="RGBA")
 
 
-def _sobre_fundo(recorte: Image.Image, tamanho: int, escala_conteudo: float) -> Image.Image:
-    canvas = Image.new("RGBA", (tamanho, tamanho), BG)
+def _sobre_fundo(recorte: Image.Image, tamanho: int, escala_conteudo: float, fundo=BG_TRANSPARENTE) -> Image.Image:
+    canvas = Image.new("RGBA", (tamanho, tamanho), fundo)
     conteudo_tam = round(tamanho * escala_conteudo)
     conteudo = recorte.resize((conteudo_tam, conteudo_tam), Image.LANCZOS)
     offset = (tamanho - conteudo_tam) // 2
@@ -74,13 +75,15 @@ def gerar() -> None:
     icon_192 = _sobre_fundo(recorte, 192, 1.0)
     icon_192.save(ICONES_DIR / "icon-192.png")
 
-    icon_maskable = _sobre_fundo(recorte, 512, 0.65)
+    # o icone "maskable" precisa de fundo solido — o Android recorta ele
+    # num formato (circulo, squircle etc) e um fundo transparente deixa
+    # buracos/artefatos nesse recorte
+    icon_maskable = _sobre_fundo(recorte, 512, 0.65, fundo=BG_SOLIDO)
     icon_maskable.save(ICONES_DIR / "icon-maskable-512.png")
 
     tamanhos_ico = [(16, 16), (32, 32), (48, 48), (256, 256)]
-    icon_512_rgb = icon_512.convert("RGB")
-    icon_512_rgb.save(RAIZ / "app" / "static" / "favicon.ico", format="ICO", sizes=tamanhos_ico)
-    icon_512_rgb.save(RAIZ / "icone_app.ico", format="ICO", sizes=tamanhos_ico)
+    icon_512.save(RAIZ / "app" / "static" / "favicon.ico", format="ICO", sizes=tamanhos_ico)
+    icon_512.save(RAIZ / "icone_app.ico", format="ICO", sizes=tamanhos_ico)
 
     print("Icones gerados em", ICONES_DIR)
 
