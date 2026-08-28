@@ -39,16 +39,25 @@ if (-not (Test-Path "$pasta\config.env")) {
     "APP_URL=https://meus-investimentos-a3yv.onrender.com" | Out-File -FilePath "$pasta\config.env" -Encoding utf8
 }
 
-# 4. Cria um atalho pra abrir rapido nas proximas vezes
-$atalho = "$pasta\Abrir Meus Investimentos.bat"
-if (-not (Test-Path $atalho)) {
-    $conteudoAtalho = "@echo off`r`ncd /d `"%~dp0`"`r`nstart `"`" pythonw.exe run_app.py`r`n"
-    [System.IO.File]::WriteAllText($atalho, $conteudoAtalho, [System.Text.Encoding]::ASCII)
-}
+# 4. Cria um atalho de verdade na Area de Trabalho, com o icone do app -
+# assim da pra fixar na barra de tarefas corretamente (um .bat fixado
+# perde o icone e os argumentos, e abre o run_app.py num editor de texto
+# em vez de rodar o app)
+$pythonwPath = (Get-Command pythonw -ErrorAction SilentlyContinue).Source
+if (-not $pythonwPath) { $pythonwPath = (Get-Command pythonw.exe).Source }
+$atalhoPath = "$env:USERPROFILE\Desktop\Meus Investimentos.lnk"
+$WshShell = New-Object -ComObject WScript.Shell
+$atalho = $WshShell.CreateShortcut($atalhoPath)
+$atalho.TargetPath = $pythonwPath
+$atalho.Arguments = "`"$pasta\run_app.py`""
+$atalho.WorkingDirectory = $pasta
+if (Test-Path "$pasta\icone_app.ico") { $atalho.IconLocation = "$pasta\icone_app.ico" }
+$atalho.Save()
 
 # 5. Abre o app agora
 Write-Host "Abrindo o app..." -ForegroundColor Green
 Start-Process pythonw.exe -ArgumentList "run_app.py" -WorkingDirectory $pasta
 
 Write-Host ""
-Write-Host "Pronto! Da proxima vez, e' so dar duplo clique em 'Abrir Meus Investimentos.bat' nesta pasta." -ForegroundColor Cyan
+Write-Host "Pronto! Um atalho 'Meus Investimentos' foi criado na sua Area de Trabalho." -ForegroundColor Cyan
+Write-Host "Da proxima vez, e' so dar duplo clique nele (ou clicar com o botao direito e escolher 'Fixar na barra de tarefas')." -ForegroundColor Cyan
