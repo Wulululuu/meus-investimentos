@@ -1,18 +1,40 @@
 # Meus Investimentos
 
-App desktop local para acompanhar ações, FIIs, ETFs e BDRs da B3: você cadastra
-o ticker, a quantidade e o preço pago, e o app busca sozinho na internet o
-preço atual, o histórico de preços, os proventos já recebidos e os próximos
-proventos anunciados.
+App para acompanhar ações, FIIs, ETFs e BDRs da B3: você cadastra o ticker, a
+quantidade e o preço pago, e o app busca sozinho na internet o preço atual, o
+histórico de preços, os proventos já recebidos e os próximos proventos
+anunciados. Roda como app desktop (Windows) e também como PWA instalável no
+celular — veja "Rodando local vs. hospedado" mais abaixo.
 
 ## Como usar
 
 - Duplo clique em **"Abrir Meus Investimentos.bat"** para abrir o app.
+- Na primeira vez, crie seu usuário e senha na tela inicial (fica salvo só
+  neste app, ninguém mais tem acesso).
 - Clique em **"Registrar entrada"** (canto superior direito) e informe ticker,
   tipo, quantidade, preço médio de compra e data da compra.
 - Clique em **"Registrar saída"** para anotar uma venda (veja a seção abaixo).
 - Clique em uma linha da tabela para ver o gráfico de preço do ativo.
 - Clique em **"Atualizar agora"** para forçar uma atualização manual.
+
+## Rodando local vs. hospedado (desktop + celular sincronizados)
+
+Por padrão o app roda **100% local** no seu PC (como sempre rodou) — grátis,
+funciona sem internet, e é só isso mesmo se você não precisar acessar pelo
+celular.
+
+Para usar do celular também, com os mesmos dados sincronizados entre PC e
+celular, é preciso hospedar o backend (veja `INSTALACAO_NUVEM.md` para o
+passo a passo completo). Resumo do que muda:
+
+- O backend passa a rodar num servidor (Render, gratuito) em vez do seu PC.
+- Os dados passam a ficar num banco remoto (Turso, gratuito) em vez do
+  arquivo `investimentos.db` local.
+- Depois de hospedado, copie `config.env.example` para `config.env` e
+  preencha `APP_URL` com o endereço do servidor — a partir daí, tanto a
+  janela desktop quanto o navegador do celular apontam pro mesmo lugar.
+- No celular: abra a URL no navegador e use "Adicionar à tela inicial" —
+  o app se comporta como instalado, com ícone próprio.
 
 ## Atualização automática
 
@@ -23,6 +45,17 @@ atualizar cotações e proventos sozinha, mesmo com o app fechado.
 - Para ver/editar/remover: abra o **Agendador de Tarefas** do Windows e
   procure por esse nome.
 - Log da última atualização automática: arquivo `atualizacao.log` nesta pasta.
+- Se você configurar `APP_URL` (modo hospedado), essa mesma tarefa passa a
+  logar sozinha com `APP_USERNAME`/`APP_SENHA` (de `config.env`) e atualizar
+  o servidor remoto em vez do banco local — não precisa recriar a tarefa.
+
+## Login
+
+O app pede usuário e senha na primeira tela. A senha nunca é guardada em
+texto puro (usa scrypt, com sal aleatório por usuário). Enquanto rodando
+local, isso só protege contra outra pessoa que use o mesmo PC; quando
+hospedado (veja acima), é o que impede qualquer um que descubra a URL de
+ver seus dados.
 
 ## Compras em datas diferentes do mesmo ativo
 
@@ -100,21 +133,29 @@ backup mais recente de volta como `investimentos.db`.
 
 ## Estrutura do projeto
 
-- `app/main.py` — backend (FastAPI) com as rotas da API.
+- `app/main.py` — backend (FastAPI) com as rotas da API e o login.
+- `app/auth.py` — hash de senha e verificação de login.
 - `app/data_fetcher.py` — busca de dados no Yahoo Finance e StatusInvest.
-- `app/updater.py` — grava os dados buscados no banco SQLite local.
+- `app/updater.py` — grava os dados buscados no banco.
 - `app/patrimonio.py` — evolução do patrimônio e alocação por tipo.
 - `app/exportador.py` — exportação da carteira para Excel.
-- `app/database.py` — schema do banco (`investimentos.db`).
+- `app/database.py` — acesso ao banco (local ou Turso, dependendo do ambiente).
+- `app/static/` — interface (HTML/CSS/JS + gráfico via Chart.js), incluindo
+  `manifest.json` e `sw.js` (PWA) e `icons/`.
 - `exports/` — arquivos `.xlsx` gerados pelo botão "Exportar para Excel".
-- `backups/` — cópias diárias automáticas de `investimentos.db`.
-- `app/static/` — interface (HTML/CSS/JS + gráfico via Chart.js).
-- `run_app.py` — abre a janela desktop do app.
+- `backups/` — cópias diárias automáticas de `investimentos.db` (só no modo local).
+- `run_app.py` — abre a janela desktop, local ou apontando pro servidor hospedado.
 - `update_daily.py` — script sem interface usado pela tarefa agendada.
 - `setup_task_scheduler.ps1` — (re)cria a tarefa agendada, se precisar.
+- `carregar_config.py` — lê `config.env` (usado por `run_app.py` e `update_daily.py`).
+- `config.env.example` — modelo de configuração (copie para `config.env`).
+- `INSTALACAO_NUVEM.md` — passo a passo para hospedar (Render + Turso + GitHub).
 
 ## Reinstalar dependências
 
 ```bash
-pip install -r requirements.txt
+pip install -r requirements-desktop.txt
 ```
+
+(`requirements.txt` sozinho é o que o servidor hospedado usa — sem
+`pywebview`, que só existe pra abrir a janela desktop local.)

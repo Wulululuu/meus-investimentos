@@ -5,8 +5,8 @@ import os
 import secrets
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -64,10 +64,14 @@ class Credenciais(BaseModel):
     senha: str
 
 
+def usuario_id_atual(request: Request) -> int:
+    # Garantido presente pelo ExigirLoginMiddleware em toda rota protegida.
+    return request.session["usuario_id"]
+
+
 @app.get("/api/auth/status")
 def status_auth(request: Request):
     return {
-        "precisa_configurar": not auth.existe_usuario(),
         "autenticado": bool(request.session.get("usuario")),
         "usuario": request.session.get("usuario"),
     }
@@ -75,21 +79,24 @@ def status_auth(request: Request):
 
 @app.post("/api/auth/registrar")
 def registrar(credenciais: Credenciais, request: Request):
-    if auth.existe_usuario():
-        raise HTTPException(403, "Já existe uma conta configurada neste app.")
     username = credenciais.username.strip()
     if not username or len(credenciais.senha) < 4:
         raise HTTPException(400, "Informe um usuário e uma senha com pelo menos 4 caracteres.")
-    auth.criar_usuario(username, credenciais.senha)
+    if not auth.username_disponivel(username):
+        raise HTTPException(409, "Esse nome de usuário já está em uso — escolha outro.")
+    novo_id = auth.criar_usuario(username, credenciais.senha)
     request.session["usuario"] = username
+    request.session["usuario_id"] = novo_id
     return {"ok": True}
 
 
 @app.post("/api/auth/login")
 def login(credenciais: Credenciais, request: Request):
-    if not auth.verificar_login(credenciais.username.strip(), credenciais.senha):
+    usuario_id = auth.obter_usuario_id(credenciais.username.strip(), credenciais.senha)
+    if usuario_id is None:
         raise HTTPException(401, "Usuário ou senha incorretos.")
     request.session["usuario"] = credenciais.username.strip()
+    request.session["usuario_id"] = usuario_id
     return {"ok": True}
 
 
@@ -100,7 +107,7 @@ def logout(request: Request):
 
 
 @app.get("/api/investimentos")
-def listar_investimentos():
+def listar_investimentos(usuario_id: int = Depends(usuario_id_atual)):
     """Retorna uma posição consolidada por ticker, somando todos os lotes de
     compra (mesmo ativo comprado em datas diferentes vira um único item).
     Proventos recebidos são calculados lote a lote, respeitando a data de
@@ -108,7 +115,8 @@ def listar_investimentos():
     conn = get_conn()
     try:
         lotes = conn.execute(
-            "SELECT * FROM investimentos ORDER BY ticker, data_compra"
+            "SELECT * FROM investimentos WHERE usuario_id = ? ORDER BY ticker, data_compra",
+            (usuario_id,),
         ).fetchall()
         hoje = dt.date.today()
         inicio_mes = hoje.replace(day=1)
@@ -197,7 +205,7 @@ def listar_investimentos():
 
 
 @app.get("/api/investimentos/{ticker}/movimentacoes")
-def listar_movimentacoes(ticker: str):
+def listar_movimentacoes(ticker: str, usuario_id: int = Depends(usuario_id_atual)):
     """Histórico de compras e vendas de um ticker, mais recente primeiro.
     Vendas são só registro histórico — não afetam quantidade nem saldo em
     nenhum outro lugar do app."""
@@ -206,13 +214,13 @@ def listar_movimentacoes(ticker: str):
     try:
         compras = conn.execute(
             "SELECT id, quantidade, preco_medio_compra, data_compra FROM investimentos "
-            "WHERE ticker = ? ORDER BY data_compra",
-            (ticker,),
+            "WHERE ticker = ? AND usuario_id = ? ORDER BY data_compra",
+            (ticker, usuario_id),
         ).fetchall()
         vendas = conn.execute(
             "SELECT id, quantidade, preco_unitario, data_venda FROM vendas "
-            "WHERE ticker = ? ORDER BY data_venda",
-            (ticker,),
+            "WHERE ticker = ? AND usuario_id = ? ORDER BY data_venda",
+            (ticker, usuario_id),
         ).fetchall()
     finally:
         conn.close()
@@ -249,14 +257,14 @@ class NovaVenda(BaseModel):
 
 
 @app.post("/api/investimentos/{ticker}/vendas")
-def registrar_venda(ticker: str, venda: NovaVenda):
+def registrar_venda(ticker: str, venda: NovaVenda, usuario_id: int = Depends(usuario_id_atual)):
     if venda.quantidade <= 0 or venda.preco_unitario <= 0:
         raise HTTPException(400, "Quantidade e preço devem ser maiores que zero")
     conn = get_conn()
     try:
         cur = conn.execute(
-            "INSERT INTO vendas (ticker, quantidade, preco_unitario, data_venda) VALUES (?, ?, ?, ?)",
-            (ticker.upper(), venda.quantidade, venda.preco_unitario, venda.data_venda),
+            "INSERT INTO vendas (ticker, quantidade, preco_unitario, data_venda, usuario_id) VALUES (?, ?, ?, ?, ?)",
+            (ticker.upper(), venda.quantidade, venda.preco_unitario, venda.data_venda, usuario_id),
         )
         conn.commit()
         novo_id = cur.lastrowid
@@ -266,14 +274,14 @@ def registrar_venda(ticker: str, venda: NovaVenda):
 
 
 @app.put("/api/vendas/{venda_id}")
-def editar_venda(venda_id: int, venda: NovaVenda):
+def editar_venda(venda_id: int, venda: NovaVenda, usuario_id: int = Depends(usuario_id_atual)):
     if venda.quantidade <= 0 or venda.preco_unitario <= 0:
         raise HTTPException(400, "Quantidade e preço devem ser maiores que zero")
     conn = get_conn()
     try:
         cur = conn.execute(
-            "UPDATE vendas SET quantidade = ?, preco_unitario = ?, data_venda = ? WHERE id = ?",
-            (venda.quantidade, venda.preco_unitario, venda.data_venda, venda_id),
+            "UPDATE vendas SET quantidade = ?, preco_unitario = ?, data_venda = ? WHERE id = ? AND usuario_id = ?",
+            (venda.quantidade, venda.preco_unitario, venda.data_venda, venda_id, usuario_id),
         )
         if cur.rowcount == 0:
             raise HTTPException(404, "Venda não encontrada")
@@ -284,10 +292,10 @@ def editar_venda(venda_id: int, venda: NovaVenda):
 
 
 @app.delete("/api/vendas/{venda_id}")
-def remover_venda(venda_id: int):
+def remover_venda(venda_id: int, usuario_id: int = Depends(usuario_id_atual)):
     conn = get_conn()
     try:
-        conn.execute("DELETE FROM vendas WHERE id = ?", (venda_id,))
+        conn.execute("DELETE FROM vendas WHERE id = ? AND usuario_id = ?", (venda_id, usuario_id))
         conn.commit()
     finally:
         conn.close()
@@ -301,7 +309,7 @@ class EdicaoInvestimento(BaseModel):
 
 
 @app.put("/api/investimentos/{investimento_id}")
-def editar_investimento(investimento_id: int, dados: EdicaoInvestimento):
+def editar_investimento(investimento_id: int, dados: EdicaoInvestimento, usuario_id: int = Depends(usuario_id_atual)):
     if dados.quantidade <= 0 or dados.preco_medio_compra <= 0:
         raise HTTPException(400, "Quantidade e preço devem ser maiores que zero")
 
@@ -309,8 +317,8 @@ def editar_investimento(investimento_id: int, dados: EdicaoInvestimento):
     try:
         cur = conn.execute(
             """UPDATE investimentos SET quantidade = ?, preco_medio_compra = ?, data_compra = ?
-               WHERE id = ?""",
-            (dados.quantidade, dados.preco_medio_compra, dados.data_compra, investimento_id),
+               WHERE id = ? AND usuario_id = ?""",
+            (dados.quantidade, dados.preco_medio_compra, dados.data_compra, investimento_id, usuario_id),
         )
         if cur.rowcount == 0:
             raise HTTPException(404, "Compra não encontrada")
@@ -321,7 +329,7 @@ def editar_investimento(investimento_id: int, dados: EdicaoInvestimento):
 
 
 @app.post("/api/investimentos")
-def criar_investimento(inv: NovoInvestimento):
+def criar_investimento(inv: NovoInvestimento, usuario_id: int = Depends(usuario_id_atual)):
     ticker = inv.ticker.strip().upper()
     if not ticker:
         raise HTTPException(400, "Ticker obrigatório")
@@ -333,9 +341,9 @@ def criar_investimento(inv: NovoInvestimento):
     conn = get_conn()
     try:
         cur = conn.execute(
-            """INSERT INTO investimentos (ticker, tipo, quantidade, preco_medio_compra, data_compra)
-               VALUES (?, ?, ?, ?, ?)""",
-            (ticker, inv.tipo, inv.quantidade, inv.preco_medio_compra, inv.data_compra),
+            """INSERT INTO investimentos (ticker, tipo, quantidade, preco_medio_compra, data_compra, usuario_id)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (ticker, inv.tipo, inv.quantidade, inv.preco_medio_compra, inv.data_compra, usuario_id),
         )
         conn.commit()
         novo_id = cur.lastrowid
@@ -347,10 +355,10 @@ def criar_investimento(inv: NovoInvestimento):
 
 
 @app.delete("/api/investimentos/{investimento_id}")
-def remover_investimento(investimento_id: int):
+def remover_investimento(investimento_id: int, usuario_id: int = Depends(usuario_id_atual)):
     conn = get_conn()
     try:
-        conn.execute("DELETE FROM investimentos WHERE id = ?", (investimento_id,))
+        conn.execute("DELETE FROM investimentos WHERE id = ? AND usuario_id = ?", (investimento_id, usuario_id))
         conn.commit()
     finally:
         conn.close()
@@ -376,28 +384,35 @@ def atualizar_agora():
 
 
 @app.get("/api/patrimonio/historico")
-def patrimonio_historico():
-    return patrimonio_mod.historico_patrimonio()
+def patrimonio_historico(usuario_id: int = Depends(usuario_id_atual)):
+    return patrimonio_mod.historico_patrimonio(usuario_id)
 
 
 @app.get("/api/alocacao")
-def alocacao():
-    return patrimonio_mod.alocacao_por_tipo()
+def alocacao(usuario_id: int = Depends(usuario_id_atual)):
+    return patrimonio_mod.alocacao_por_tipo(usuario_id)
 
 
 class MetaRenda(BaseModel):
     valor: float
 
 
+def _chave_meta_renda(usuario_id: int) -> str:
+    return f"meta_renda_mensal:{usuario_id}"
+
+
 @app.get("/api/meta-renda")
-def obter_meta_renda():
+def obter_meta_renda(usuario_id: int = Depends(usuario_id_atual)):
     conn = get_conn()
     try:
-        row = conn.execute("SELECT valor FROM meta WHERE chave = 'meta_renda_mensal'").fetchone()
+        row = conn.execute(
+            "SELECT valor FROM meta WHERE chave = ?", (_chave_meta_renda(usuario_id),)
+        ).fetchone()
         meta_mensal = float(row["valor"]) if row else None
 
         lotes = conn.execute(
-            "SELECT ticker, quantidade, data_compra FROM investimentos"
+            "SELECT ticker, quantidade, data_compra FROM investimentos WHERE usuario_id = ?",
+            (usuario_id,),
         ).fetchall()
         um_ano_atras = (dt.date.today() - dt.timedelta(days=365)).isoformat()
         renda_12m = 0.0
@@ -421,15 +436,15 @@ def obter_meta_renda():
 
 
 @app.post("/api/meta-renda")
-def definir_meta_renda(meta: MetaRenda):
+def definir_meta_renda(meta: MetaRenda, usuario_id: int = Depends(usuario_id_atual)):
     if meta.valor <= 0:
         raise HTTPException(400, "Informe um valor maior que zero")
     conn = get_conn()
     try:
         conn.execute(
-            "INSERT INTO meta (chave, valor) VALUES ('meta_renda_mensal', ?) "
+            "INSERT INTO meta (chave, valor) VALUES (?, ?) "
             "ON CONFLICT(chave) DO UPDATE SET valor=excluded.valor",
-            (str(meta.valor),),
+            (_chave_meta_renda(usuario_id), str(meta.valor)),
         )
         conn.commit()
     finally:
@@ -437,17 +452,15 @@ def definir_meta_renda(meta: MetaRenda):
     return {"ok": True}
 
 
-@app.post("/api/exportar")
-def exportar_carteira():
-    caminho = exportador.exportar_carteira()
-    return {"arquivo": str(caminho)}
-
-
-@app.post("/api/exportar/abrir-pasta")
-def abrir_pasta_exportacao():
-    exportador.EXPORTS_DIR.mkdir(exist_ok=True)
-    os.startfile(exportador.EXPORTS_DIR)  # noqa: S606 - app desktop local, pasta do próprio usuário
-    return {"ok": True}
+@app.get("/api/exportar")
+def exportar_carteira(usuario_id: int = Depends(usuario_id_atual)):
+    conteudo = exportador.exportar_carteira(usuario_id)
+    nome_arquivo = f"carteira_{dt.date.today().isoformat()}.xlsx"
+    return Response(
+        content=conteudo,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{nome_arquivo}"'},
+    )
 
 
 @app.get("/api/status")

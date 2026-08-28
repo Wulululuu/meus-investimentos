@@ -376,19 +376,10 @@ document.getElementById("form-meta-renda").addEventListener("submit", async (ev)
   await carregarMetaRenda();
 });
 
-document.getElementById("btn-exportar").addEventListener("click", async (ev) => {
-  ev.target.disabled = true;
-  ev.target.textContent = "Exportando...";
-  try {
-    const resp = await fetch("/api/exportar", { method: "POST" });
-    const dados = await resp.json();
-    if (confirm(`Exportado para:\n${dados.arquivo}\n\nAbrir a pasta agora?`)) {
-      await fetch("/api/exportar/abrir-pasta", { method: "POST" });
-    }
-  } finally {
-    ev.target.disabled = false;
-    ev.target.textContent = "Exportar para Excel";
-  }
+document.getElementById("btn-exportar").addEventListener("click", () => {
+  // Navegar pra essa URL não sai da página — o cabeçalho Content-Disposition
+  // do backend faz o navegador só baixar o arquivo (funciona local ou hospedado).
+  window.location.href = "/api/exportar";
 });
 
 async function carregarStatus() {
@@ -503,14 +494,15 @@ document.getElementById("btn-sair").addEventListener("click", async () => {
   location.reload();
 });
 
-document.getElementById("form-login").addEventListener("submit", async (ev) => {
-  ev.preventDefault();
-  const dados = Object.fromEntries(new FormData(ev.target).entries());
+async function enviarLogin(acao) {
+  const form = document.getElementById("form-login");
+  if (!form.reportValidity()) return;
+
+  const dados = Object.fromEntries(new FormData(form).entries());
   const erroEl = document.getElementById("login-erro");
   erroEl.classList.add("oculto");
 
-  const modoCadastro = !document.getElementById("login-config-aviso").classList.contains("oculto");
-  const resp = await fetch(`/api/auth/${modoCadastro ? "registrar" : "login"}`, {
+  const resp = await fetch(`/api/auth/${acao}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(dados),
@@ -523,12 +515,22 @@ document.getElementById("form-login").addEventListener("submit", async (ev) => {
     return;
   }
 
-  iniciarApp();
+  iniciarApp(dados.username);
+}
+
+document.getElementById("form-login").addEventListener("submit", (ev) => {
+  ev.preventDefault();
+  enviarLogin("login");
 });
 
-function iniciarApp() {
+document.getElementById("btn-login-criar-conta").addEventListener("click", () => {
+  enviarLogin("registrar");
+});
+
+function iniciarApp(nomeUsuario) {
   document.getElementById("tela-login").classList.add("oculto");
   document.getElementById("app-conteudo").classList.remove("oculto");
+  if (nomeUsuario) document.getElementById("usuario-logado").textContent = nomeUsuario;
   carregarInvestimentos();
   carregarStatus();
 }
@@ -538,13 +540,11 @@ async function bootstrap() {
   const dados = await resp.json();
 
   if (dados.autenticado) {
-    iniciarApp();
+    iniciarApp(dados.usuario);
     return;
   }
 
   document.getElementById("tela-login").classList.remove("oculto");
-  document.getElementById("login-config-aviso").classList.toggle("oculto", !dados.precisa_configurar);
-  document.getElementById("btn-login-submit").textContent = dados.precisa_configurar ? "Criar conta" : "Entrar";
 }
 
 bootstrap();

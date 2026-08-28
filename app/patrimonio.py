@@ -8,11 +8,12 @@ import bisect
 from .database import get_conn
 
 
-def historico_patrimonio() -> list[dict]:
+def historico_patrimonio(usuario_id: int) -> list[dict]:
     conn = get_conn()
     try:
         lotes = conn.execute(
-            "SELECT ticker, quantidade, preco_medio_compra, data_compra FROM investimentos"
+            "SELECT ticker, quantidade, preco_medio_compra, data_compra FROM investimentos WHERE usuario_id = ?",
+            (usuario_id,),
         ).fetchall()
         if not lotes:
             return []
@@ -86,11 +87,13 @@ def historico_patrimonio() -> list[dict]:
     return resultado
 
 
-def alocacao_por_tipo() -> list[dict]:
+def alocacao_por_tipo(usuario_id: int) -> list[dict]:
     conn = get_conn()
     try:
         lotes = conn.execute(
-            "SELECT ticker, tipo, quantidade, preco_medio_compra FROM investimentos ORDER BY ticker, data_compra"
+            "SELECT ticker, tipo, quantidade, preco_medio_compra FROM investimentos "
+            "WHERE usuario_id = ? ORDER BY ticker, data_compra",
+            (usuario_id,),
         ).fetchall()
         cotacoes = {
             r["ticker"]: r["preco_atual"]

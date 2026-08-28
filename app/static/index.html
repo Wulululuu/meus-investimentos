@@ -24,8 +24,12 @@
       <label>Senha
         <input type="password" name="senha" required autocomplete="current-password" minlength="4" />
       </label>
-      <button type="submit" id="btn-login-submit">Entrar</button>
-      <p id="login-config-aviso" class="muted oculto">Primeira vez aqui — essa tela vai criar sua conta.</p>
+      <div class="acoes-login">
+        <button type="submit" id="btn-login-entrar">Entrar</button>
+        <button type="button" id="btn-login-criar-conta">Criar conta nova</button>
+      </div>
+      <p class="muted" style="text-align:center">Cada conta tem sua própria carteira — ninguém vê os
+        investimentos de outra pessoa.</p>
       <p id="login-erro" class="erro oculto"></p>
     </form>
   </div>
@@ -43,6 +47,7 @@
       <button id="btn-registrar-entrada">Registrar entrada</button>
       <button id="btn-registrar-saida">Registrar saída</button>
     </div>
+    <span id="usuario-logado" class="muted"></span>
     <button id="btn-sair" title="Sair da conta">Sair</button>
   </div>
 </header>

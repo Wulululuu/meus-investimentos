@@ -53,7 +53,10 @@ button#btn-sair:hover { color: var(--vermelho); border-color: var(--vermelho); }
   width: min(360px, 100%);
 }
 .login-card h1 { font-size: 20px; margin: 0 0 20px; text-align: center; }
-.login-card button[type="submit"] { margin-top: 4px; }
+
+.acoes-login { display: flex; gap: 8px; margin-top: 4px; }
+.acoes-login button { flex: 1; }
+#btn-login-criar-conta { background: #2a3348; }
 
 .botoes-movimentacao {
   display: flex;

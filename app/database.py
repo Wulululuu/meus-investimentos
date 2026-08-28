@@ -175,12 +175,25 @@ def get_conn() -> _ConexaoCompat:
     return conn
 
 
+def _tem_coluna(conn: _ConexaoCompat, tabela: str, coluna: str) -> bool:
+    linhas = conn.execute(f"PRAGMA table_info({tabela})").fetchall()
+    return any(l["name"] == coluna for l in linhas)
+
+
 def _migrar(conn: _ConexaoCompat) -> None:
     """Ajustes de schema em bancos já existentes (evita ter que apagar dados)."""
     conn.execute("DROP TABLE IF EXISTS sugestoes")
     conn.execute("DROP TABLE IF EXISTS perfil_investidor")
     conn.execute("DROP TABLE IF EXISTS sugestoes_ia")
     conn.execute("DELETE FROM meta WHERE chave = 'sugestoes_ia_gerado_em'")
+
+    # multiusuário: cada lote de compra/venda passa a pertencer a um usuário.
+    # Fica NULL para dados antigos de antes dessa mudança — o primeiro usuário
+    # a se cadastrar "herda" automaticamente esses dados órfãos (ver auth.py).
+    if not _tem_coluna(conn, "investimentos", "usuario_id"):
+        conn.execute("ALTER TABLE investimentos ADD COLUMN usuario_id INTEGER")
+    if not _tem_coluna(conn, "vendas", "usuario_id"):
+        conn.execute("ALTER TABLE vendas ADD COLUMN usuario_id INTEGER")
 
 
 def init_db():

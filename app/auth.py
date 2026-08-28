@@ -1,6 +1,6 @@
-"""Autenticação simples de usuário+senha (um único usuário, já que o app é
-pessoal). Senha nunca é guardada em texto puro: usamos scrypt (embutido no
-Python, sem dependência extra) para gerar um hash com sal aleatório.
+"""Autenticação de usuário+senha — cada usuário só vê os próprios
+investimentos. Senha nunca é guardada em texto puro: usamos scrypt (embutido
+no Python, sem dependência extra) para gerar um hash com sal aleatório.
 
 O login "abre a porteira" de todas as rotas de API (menos /api/auth/*) via
 uma sessão de cookie assinada (SessionMiddleware do Starlette) — funciona
@@ -28,29 +28,53 @@ def existe_usuario() -> bool:
         conn.close()
 
 
-def criar_usuario(username: str, senha: str) -> None:
-    sal = os.urandom(16)
+def username_disponivel(username: str) -> bool:
     conn = get_conn()
     try:
-        conn.execute(
-            "INSERT INTO usuarios (username, senha_hash, senha_sal) VALUES (?, ?, ?)",
-            (username, _gerar_hash(senha, sal), sal.hex()),
-        )
-        conn.commit()
+        row = conn.execute("SELECT id FROM usuarios WHERE username = ?", (username,)).fetchone()
+        return row is None
     finally:
         conn.close()
 
 
-def verificar_login(username: str, senha: str) -> bool:
+def criar_usuario(username: str, senha: str) -> int:
+    """Cria o usuário e retorna seu id. Se for o PRIMEIRO usuário do sistema,
+    ele "herda" automaticamente qualquer investimento/venda órfã (dados de
+    antes de existir login multiusuário, ou migrados de uma versão anterior
+    do app) — assim ninguém perde a carteira que já tinha cadastrado."""
+    era_o_primeiro = not existe_usuario()
+    sal = os.urandom(16)
+    conn = get_conn()
+    try:
+        cur = conn.execute(
+            "INSERT INTO usuarios (username, senha_hash, senha_sal) VALUES (?, ?, ?)",
+            (username, _gerar_hash(senha, sal), sal.hex()),
+        )
+        novo_id = cur.lastrowid
+
+        if era_o_primeiro:
+            conn.execute("UPDATE investimentos SET usuario_id = ? WHERE usuario_id IS NULL", (novo_id,))
+            conn.execute("UPDATE vendas SET usuario_id = ? WHERE usuario_id IS NULL", (novo_id,))
+
+        conn.commit()
+        return novo_id
+    finally:
+        conn.close()
+
+
+def obter_usuario_id(username: str, senha: str) -> int | None:
+    """Verifica a senha e, se correta, retorna o id do usuário (ou None)."""
     conn = get_conn()
     try:
         row = conn.execute(
-            "SELECT senha_hash, senha_sal FROM usuarios WHERE username = ?", (username,)
+            "SELECT id, senha_hash, senha_sal FROM usuarios WHERE username = ?", (username,)
         ).fetchone()
     finally:
         conn.close()
 
     if row is None:
-        return False
+        return None
     sal = bytes.fromhex(row["senha_sal"])
-    return _gerar_hash(senha, sal) == row["senha_hash"]
+    if _gerar_hash(senha, sal) != row["senha_hash"]:
+        return None
+    return row["id"]

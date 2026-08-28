@@ -1,16 +1,18 @@
 """Exporta a carteira (posicoes, compras e proventos) para um arquivo Excel,
-util para declaracao de imposto de renda ou planilhas proprias."""
+util para declaracao de imposto de renda ou planilhas proprias.
+
+Gera o arquivo inteiramente em memoria (sem salvar em disco no servidor) e
+devolve os bytes prontos para download — funciona igual rodando local ou
+hospedado (no servidor hospedado o disco e' temporario, entao nunca faria
+sentido depender de um arquivo salvo la)."""
 from __future__ import annotations
 
-import datetime as dt
-from pathlib import Path
+import io
 
 from openpyxl import Workbook
 from openpyxl.styles import Font
 
 from .database import get_conn
-
-EXPORTS_DIR = Path(__file__).resolve().parent.parent / "exports"
 
 
 def _cabecalho(ws, colunas: list[str]) -> None:
@@ -19,20 +21,26 @@ def _cabecalho(ws, colunas: list[str]) -> None:
         cel.font = Font(bold=True)
 
 
-def exportar_carteira() -> Path:
+def exportar_carteira(usuario_id: int) -> bytes:
     conn = get_conn()
     try:
         lotes = conn.execute(
-            "SELECT * FROM investimentos ORDER BY ticker, data_compra"
+            "SELECT * FROM investimentos WHERE usuario_id = ? ORDER BY ticker, data_compra",
+            (usuario_id,),
         ).fetchall()
+        tickers_usuario = {l["ticker"] for l in lotes}
         cotacoes = {
             r["ticker"]: r for r in conn.execute("SELECT * FROM cotacoes_atuais").fetchall()
         }
-        proventos = conn.execute(
-            "SELECT * FROM proventos_recebidos ORDER BY ticker, data_ex"
-        ).fetchall()
+        proventos = [
+            dict(p) for p in conn.execute(
+                "SELECT * FROM proventos_recebidos ORDER BY ticker, data_ex"
+            ).fetchall()
+            if p["ticker"] in tickers_usuario
+        ]
         vendas = conn.execute(
-            "SELECT * FROM vendas ORDER BY ticker, data_venda"
+            "SELECT * FROM vendas WHERE usuario_id = ? ORDER BY ticker, data_venda",
+            (usuario_id,),
         ).fetchall()
     finally:
         conn.close()
@@ -93,8 +101,6 @@ def exportar_carteira() -> Path:
     for p in proventos:
         ws_proventos.append([p["ticker"], p["data_ex"], p["valor_por_cota"]])
 
-    EXPORTS_DIR.mkdir(exist_ok=True)
-    nome_arquivo = f"carteira_{dt.date.today().isoformat()}.xlsx"
-    caminho = EXPORTS_DIR / nome_arquivo
-    wb.save(caminho)
-    return caminho
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    return buffer.getvalue()
