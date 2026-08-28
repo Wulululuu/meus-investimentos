@@ -106,21 +106,13 @@ def gerar() -> None:
     icon_maskable = _desenhar_base(512, com_fundo=True, escala_conteudo=0.62)
     icon_maskable.save(ICONES_DIR / "icon-maskable-512.png")
 
-    # favicon.ico (aba do navegador) e icone da janela desktop, em varios tamanhos
-    tamanhos_ico = [16, 32, 48, 256]
-    imgs_ico = [_desenhar_base(t, com_fundo=True, escala_conteudo=1.0) for t in tamanhos_ico]
-    imgs_ico[0].save(
-        RAIZ / "app" / "static" / "favicon.ico",
-        format="ICO",
-        sizes=[(t, t) for t in tamanhos_ico],
-        append_images=imgs_ico[1:],
-    )
-    imgs_ico[0].save(
-        RAIZ / "icone_app.ico",
-        format="ICO",
-        sizes=[(t, t) for t in tamanhos_ico],
-        append_images=imgs_ico[1:],
-    )
+    # favicon.ico (aba do navegador) e icone da janela desktop, em varios
+    # tamanhos — precisa partir de uma imagem grande (o Pillow reduz pra
+    # cada tamanho pedido); gerar a partir de uma imagem pequena e ampliar
+    # deixa o icone borrado/pixelizado.
+    tamanhos_ico = [(16, 16), (32, 32), (48, 48), (256, 256)]
+    icon_512.save(RAIZ / "app" / "static" / "favicon.ico", format="ICO", sizes=tamanhos_ico)
+    icon_512.save(RAIZ / "icone_app.ico", format="ICO", sizes=tamanhos_ico)
 
     print("Icones gerados em", ICONES_DIR)
 
