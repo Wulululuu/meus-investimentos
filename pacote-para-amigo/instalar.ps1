@@ -34,6 +34,7 @@ $base = "https://raw.githubusercontent.com/Wulululuu/meus-investimentos/main/pac
 Write-Host "Baixando o app..." -ForegroundColor Yellow
 Invoke-WebRequest -Uri "$base/run_app.py" -OutFile "$pasta\run_app.py"
 Invoke-WebRequest -Uri "$base/carregar_config.py" -OutFile "$pasta\carregar_config.py"
+Invoke-WebRequest -Uri "$base/icone_app.ico" -OutFile "$pasta\icone_app.ico"
 if (-not (Test-Path "$pasta\config.env")) {
     "APP_URL=https://meus-investimentos-a3yv.onrender.com" | Out-File -FilePath "$pasta\config.env" -Encoding utf8
 }

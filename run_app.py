@@ -21,6 +21,7 @@ import logging
 import socket
 import threading
 import time
+from pathlib import Path
 
 import webview
 
@@ -28,6 +29,8 @@ HOST = "127.0.0.1"
 PORT = 8756
 
 APP_URL = os.environ.get("APP_URL", "").strip()
+
+ICONE = Path(__file__).resolve().parent / "icone_app.ico"
 
 log = logging.getLogger("run_app")
 
@@ -70,4 +73,4 @@ if __name__ == "__main__":
         url_janela = f"http://{HOST}:{PORT}"
 
     webview.create_window("Meus Investimentos", url_janela, width=1200, height=800)
-    webview.start()
+    webview.start(icon=str(ICONE) if ICONE.exists() else None)
