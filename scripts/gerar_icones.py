@@ -1,118 +1,86 @@
-"""Gera os icones do app (PWA + janela desktop) a partir de formas
-desenhadas com Pillow: cifrao verde sobre um grafico de barras em alta,
-com moedas douradas — no mesmo estilo/paleta do app (fundo #0f1420,
-verde #2ecc71).
+"""Gera os icones do app (PWA + favicon + janela desktop) a partir da
+imagem que o usuario escolheu (cifrao verde 3D + grafico em alta + moedas).
+
+A imagem original vem com um fundo em xadrez cinza "gravado" nos pixels
+(nao e' transparencia de verdade — o arquivo e' um .jpeg, que nem suporta
+alpha). Esse script remove esse fundo (por cor + limpeza da franja de
+ruido de compressao jpeg nas bordas das linhas finas), recorta um
+quadrado centrado no cifrao e gera todos os tamanhos precisando de icone
+no app.
 
 Roda uma vez, manualmente, quando quiser trocar o visual do icone.
 """
 from __future__ import annotations
 
-import math
 from pathlib import Path
 
-from PIL import Image, ImageDraw, ImageFont
+import numpy as np
+from PIL import Image
+from scipy import ndimage
 
 RAIZ = Path(__file__).resolve().parent.parent
 ICONES_DIR = RAIZ / "app" / "static" / "icons"
 ICONES_DIR.mkdir(parents=True, exist_ok=True)
 
-BG = (15, 20, 32, 255)        # --bg
-VERDE = (46, 204, 113, 255)   # --verde
-VERDE_ESCURO = (33, 150, 83, 255)
-DOURADO = (240, 190, 90, 255)
-DOURADO_ESCURO = (200, 150, 60, 255)
-BRANCO = (232, 236, 244, 255)
-
-FONTE_BOLD = r"C:\Windows\Fonts\arialbd.ttf"
+FONTE = Path(__file__).resolve().parent / "assets" / "logo_fonte.jpeg"
+BG = (15, 20, 32, 255)  # --bg do app
 
 
-def _desenhar_base(tamanho: int, *, com_fundo: bool, escala_conteudo: float) -> Image.Image:
-    """Desenha o icone num canvas grande (para depois reduzir com anti-aliasing).
+def _remover_fundo_xadrez(im: Image.Image) -> Image.Image:
+    arr = np.array(im.convert("RGB")).astype(float)
+    maxc, minc = arr.max(axis=2), arr.min(axis=2)
+    sat = maxc - minc
 
-    escala_conteudo < 1 encolhe o desenho em direcao ao centro (usado no
-    icone "maskable", que precisa de uma margem de seguranca porque o SO
-    recorta o icone em formatos variados).
-    """
-    S = 2048  # desenha em alta resolucao e reduz no final
-    img = Image.new("RGBA", (S, S), BG if com_fundo else (0, 0, 0, 0))
-    draw = ImageDraw.Draw(img)
+    cor_a, cor_b = np.array([193, 193, 193.0]), np.array([251, 251, 251.0])
+    dist_a = np.linalg.norm(arr - cor_a, axis=2)
+    dist_b = np.linalg.norm(arr - cor_b, axis=2)
+    candidato = (dist_a < 22) | (dist_b < 12)
 
-    cx, cy = S / 2, S / 2
+    rotulos, _ = ndimage.label(candidato, structure=np.ones((3, 3), dtype=int))
+    tamanhos = np.bincount(rotulos.ravel())
+    tamanhos[0] = 0
+    mascara = np.isin(rotulos, np.where(tamanhos > 40)[0])
 
-    def esc(x: float, y: float) -> tuple[float, float]:
-        return (cx + (x - cx) * escala_conteudo, cy + (y - cy) * escala_conteudo)
+    # limpa a franja cinza de ringing do jpeg colada nas bordas das linhas
+    # finas pretas, que sobra colada no fundo ja removido
+    cinza_generico = (sat < 15) & (maxc > 50)
+    for _ in range(4):
+        dilatado = ndimage.binary_dilation(mascara, iterations=3)
+        mascara = mascara | (dilatado & cinza_generico)
 
-    # --- grafico de barras em alta (base do desenho) ---
-    n_barras = 5
-    largura_barra = S * 0.09
-    espaco = S * 0.045
-    base_y = S * 0.78
-    alturas = [0.16, 0.26, 0.36, 0.48, 0.62]
-    x0 = S * 0.10
-    for i, h in enumerate(alturas):
-        x = x0 + i * (largura_barra + espaco)
-        topo = base_y - S * h
-        p0 = esc(x, base_y)
-        p1 = esc(x + largura_barra, topo)
-        cor = VERDE if i % 2 == 0 else VERDE_ESCURO
-        draw.rectangle([min(p0[0], p1[0]), min(p0[1], p1[1]), max(p0[0], p1[0]), max(p0[1], p1[1])], fill=cor)
+    alpha = ndimage.gaussian_filter(np.where(mascara, 0.0, 255.0), sigma=1.0)
+    return Image.fromarray(np.dstack([arr, alpha]).astype(np.uint8), mode="RGBA")
 
-    # --- seta ascendente por cima das barras ---
-    seta_pts = [
-        esc(S * 0.08, S * 0.62),
-        esc(S * 0.34, S * 0.42),
-        esc(S * 0.50, S * 0.52),
-        esc(S * 0.80, S * 0.20),
-    ]
-    largura_linha = int(S * 0.028 * escala_conteudo)
-    draw.line(seta_pts, fill=BRANCO, width=largura_linha, joint="curve")
-    # ponta da seta
-    ponta = esc(S * 0.80, S * 0.20)
-    direcao = esc(S * 0.68, S * 0.30)
-    ang = math.atan2(ponta[1] - direcao[1], ponta[0] - direcao[0])
-    tam_ponta = S * 0.075 * escala_conteudo
-    p_a = (ponta[0] - tam_ponta * math.cos(ang - math.radians(28)), ponta[1] - tam_ponta * math.sin(ang - math.radians(28)))
-    p_b = (ponta[0] - tam_ponta * math.cos(ang + math.radians(28)), ponta[1] - tam_ponta * math.sin(ang + math.radians(28)))
-    draw.polygon([ponta, p_a, p_b], fill=BRANCO)
 
-    # --- moedas douradas caindo ---
-    moedas = [(S * 0.72, S * 0.62, 0.11), (S * 0.85, S * 0.50, 0.085), (S * 0.62, S * 0.74, 0.07)]
-    for mx, my, mr in moedas:
-        raio = S * mr * escala_conteudo
-        centro = esc(mx, my)
-        draw.ellipse([centro[0] - raio, centro[1] - raio, centro[0] + raio, centro[1] + raio], fill=DOURADO, outline=DOURADO_ESCURO, width=max(2, int(raio * 0.12)))
-
-    # --- cifrao verde, elemento principal, por cima de tudo ---
-    fonte_tam = int(S * 0.62 * escala_conteudo)
-    fonte = ImageFont.truetype(FONTE_BOLD, fonte_tam)
-    texto = "$"
-    bbox = draw.textbbox((0, 0), texto, font=fonte)
-    tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
-    tx = cx - tw / 2 - bbox[0]
-    ty = cy - th / 2 - bbox[1] - S * 0.02 * escala_conteudo
-    contorno = max(2, int(S * 0.012 * escala_conteudo))
-    draw.text((tx, ty), texto, font=fonte, fill=VERDE, stroke_width=contorno, stroke_fill=(10, 14, 22, 255))
-
-    return img.resize((tamanho, tamanho), Image.LANCZOS)
+def _sobre_fundo(recorte: Image.Image, tamanho: int, escala_conteudo: float) -> Image.Image:
+    canvas = Image.new("RGBA", (tamanho, tamanho), BG)
+    conteudo_tam = round(tamanho * escala_conteudo)
+    conteudo = recorte.resize((conteudo_tam, conteudo_tam), Image.LANCZOS)
+    offset = (tamanho - conteudo_tam) // 2
+    canvas.paste(conteudo, (offset, offset), conteudo)
+    return canvas
 
 
 def gerar() -> None:
-    icon_512 = _desenhar_base(512, com_fundo=True, escala_conteudo=1.0)
+    bruto = Image.open(FONTE)
+    sem_fundo = _remover_fundo_xadrez(bruto)
+
+    # recorte quadrado centrado no cifrao (a imagem original e' 896x1200)
+    recorte = sem_fundo.crop((0, 255, 896, 1151))
+
+    icon_512 = _sobre_fundo(recorte, 512, 1.0)
     icon_512.save(ICONES_DIR / "icon-512.png")
 
-    icon_192 = _desenhar_base(192, com_fundo=True, escala_conteudo=1.0)
+    icon_192 = _sobre_fundo(recorte, 192, 1.0)
     icon_192.save(ICONES_DIR / "icon-192.png")
 
-    icon_maskable = _desenhar_base(512, com_fundo=True, escala_conteudo=0.62)
+    icon_maskable = _sobre_fundo(recorte, 512, 0.65)
     icon_maskable.save(ICONES_DIR / "icon-maskable-512.png")
 
-    # favicon.ico (aba do navegador) e icone da janela desktop, em varios
-    # tamanhos — precisa partir de uma imagem grande (o Pillow reduz pra
-    # cada tamanho pedido); gerar a partir de uma imagem pequena e ampliar
-    # deixa o icone borrado/pixelizado.
     tamanhos_ico = [(16, 16), (32, 32), (48, 48), (256, 256)]
-    icon_512.save(RAIZ / "app" / "static" / "favicon.ico", format="ICO", sizes=tamanhos_ico)
-    icon_512.save(RAIZ / "icone_app.ico", format="ICO", sizes=tamanhos_ico)
+    icon_512_rgb = icon_512.convert("RGB")
+    icon_512_rgb.save(RAIZ / "app" / "static" / "favicon.ico", format="ICO", sizes=tamanhos_ico)
+    icon_512_rgb.save(RAIZ / "icone_app.ico", format="ICO", sizes=tamanhos_ico)
 
     print("Icones gerados em", ICONES_DIR)
 
