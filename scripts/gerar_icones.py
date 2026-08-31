@@ -81,6 +81,11 @@ def gerar() -> None:
     icon_maskable = _sobre_fundo(recorte, 512, 0.65, fundo=BG_SOLIDO)
     icon_maskable.save(ICONES_DIR / "icon-maskable-512.png")
 
+    # o icone da tela inicial do iOS tambem precisa de fundo solido — o
+    # Safari nao preenche transparencia, ela vira preto no icone real
+    apple_touch_icon = _sobre_fundo(recorte, 180, 1.0, fundo=BG_SOLIDO)
+    apple_touch_icon.save(ICONES_DIR / "apple-touch-icon.png")
+
     tamanhos_ico = [(16, 16), (32, 32), (48, 48), (256, 256)]
     icon_512.save(RAIZ / "app" / "static" / "favicon.ico", format="ICO", sizes=tamanhos_ico)
     icon_512.save(RAIZ / "icone_app.ico", format="ICO", sizes=tamanhos_ico)

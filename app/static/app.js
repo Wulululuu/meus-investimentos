@@ -434,10 +434,26 @@ document.getElementById("btn-instalar-celular").addEventListener("click", async 
     }
     return;
   }
-  const iOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
-  instrucoesEl.textContent = iOS
-    ? 'No Safari, toque no ícone de compartilhar (o quadrado com a seta pra cima) e depois em "Adicionar à Tela de Início".'
-    : 'Abra o menu do navegador (⋮ ou ≡) e escolha "Instalar app" ou "Adicionar à tela inicial".';
+
+  const ua = navigator.userAgent;
+  const iOS = /iphone|ipad|ipod/i.test(ua) || (navigator.maxTouchPoints > 1 && /macintosh/i.test(ua));
+  const safari = /safari/i.test(ua) && !/crios|fxios|edgios|chrome/i.test(ua);
+
+  if (iOS && !safari) {
+    instrucoesEl.innerHTML =
+      "Nesse navegador não dá pra instalar. Abra <strong>esse mesmo link no Safari</strong> " +
+      "(o navegador padrão do iPhone) e repita o passo.";
+  } else if (iOS) {
+    instrucoesEl.innerHTML =
+      '1. Toque no ícone de compartilhar <strong>⬆️</strong> na barra do Safari (embaixo, no meio)<br>' +
+      '2. Role a lista de opções e toque em <strong>"Adicionar à Tela de Início"</strong> — ' +
+      '<em>não</em> em "Adicionar aos Favoritos", que é uma opção diferente e só salva um link<br>' +
+      '3. Toque em <strong>"Adicionar"</strong> no canto superior direito';
+  } else {
+    instrucoesEl.innerHTML =
+      'Abra o menu do navegador (⋮ ou ≡) e escolha <strong>"Instalar app"</strong> ou ' +
+      '<strong>"Adicionar à tela inicial"</strong>.';
+  }
   instrucoesEl.classList.remove("oculto");
 });
 
