@@ -6,6 +6,11 @@ apos o fechamento da B3, atualizando cotacoes, historico e proventos.
   que mantem os dados atualizados quando o app esta na nuvem, sincronizado
   com o celular.
 - Caso contrario, atualiza direto o banco local, como sempre funcionou.
+
+Em qualquer um dos dois casos o backup do banco e' gerado AQUI, nesta maquina.
+Isso importa: com o app hospedado, quem rodava o backup era o servidor remoto,
+gravando num disco efemero que se perde a cada deploy — ou seja, na pratica nao
+havia backup nenhum. Agora o arquivo .db do dia cai na pasta backups/ local.
 """
 import os
 import sys
@@ -40,6 +45,18 @@ def _atualizar_remoto() -> None:
         print(f"[remoto] Com erro: {resultado['com_erro']}")
 
 
+def _fazer_backup_local() -> None:
+    """Gera o backup do dia na pasta backups/ desta maquina, lendo o banco que
+    o app realmente usa (Turso, quando configurado)."""
+    from app.backup import fazer_backup_banco
+
+    caminho = fazer_backup_banco()
+    if caminho is None:
+        print("[backup] NAO foi possivel gerar o backup — veja atualizacao.log.")
+    else:
+        print(f"[backup] {caminho.name} ({caminho.stat().st_size:,} bytes)")
+
+
 def _atualizar_local() -> None:
     from app.updater import atualizar_tudo
 
@@ -52,5 +69,9 @@ def _atualizar_local() -> None:
 if __name__ == "__main__":
     if APP_URL:
         _atualizar_remoto()
+        # No caminho local o backup ja acontece dentro de atualizar_tudo();
+        # aqui, como a atualizacao roda no servidor, ele precisa ser feito
+        # explicitamente desta maquina.
+        _fazer_backup_local()
     else:
         _atualizar_local()

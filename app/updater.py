@@ -5,16 +5,14 @@ from __future__ import annotations
 
 import datetime as dt
 import logging
-import shutil
 
 from pathlib import Path
 
 from . import data_fetcher
-from .database import DB_PATH, get_conn
+from .backup import fazer_backup_banco
+from .database import get_conn
 
 LOG_PATH = Path(__file__).resolve().parent.parent / "atualizacao.log"
-BACKUPS_DIR = Path(__file__).resolve().parent.parent / "backups"
-BACKUPS_PARA_MANTER = 14
 
 logging.basicConfig(
     level=logging.INFO,
@@ -24,21 +22,11 @@ logging.basicConfig(
 log = logging.getLogger("updater")
 
 
-def fazer_backup_banco() -> None:
-    """Copia o banco de dados para backups/, mantendo apenas os N mais recentes."""
-    if not DB_PATH.exists():
-        return
-    BACKUPS_DIR.mkdir(exist_ok=True)
-    destino = BACKUPS_DIR / f"investimentos_{dt.date.today().isoformat()}.db"
-    try:
-        shutil.copy2(DB_PATH, destino)
-    except OSError as exc:
-        log.warning("Falha ao criar backup do banco: %s", exc)
-        return
-
-    backups = sorted(BACKUPS_DIR.glob("investimentos_*.db"))
-    for antigo in backups[:-BACKUPS_PARA_MANTER]:
-        antigo.unlink(missing_ok=True)
+# O backup mora em app/backup.py desde que o app passou a usar o Turso: copiar
+# o arquivo investimentos.db nao serve mais como copia de seguranca, porque esse
+# arquivo parou de receber dados na migracao. `fazer_backup_banco` continua sendo
+# importado aqui (e chamado no fim de `atualizar_tudo`) para nao mudar nada de
+# fora, mas quem faz o trabalho agora e' o modulo novo.
 
 
 def tickers_cadastrados() -> list[tuple[str, str]]:
