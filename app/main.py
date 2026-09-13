@@ -15,6 +15,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from .database import get_conn, init_db
 from .updater import atualizar_tudo, atualizar_ticker
 from . import patrimonio as patrimonio_mod
+from . import posicao as posicao_mod
 from . import exportador
 from . import auth
 
@@ -110,12 +111,17 @@ def logout(request: Request):
 def listar_investimentos(usuario_id: int = Depends(usuario_id_atual)):
     """Retorna uma posição consolidada por ticker, somando todos os lotes de
     compra (mesmo ativo comprado em datas diferentes vira um único item).
-    Proventos recebidos são calculados lote a lote, respeitando a data de
-    compra de cada lote, e depois somados."""
+    Vendas reduzem a quantidade em posse (e o valor investido junto), mas os
+    proventos recebidos até a data de cada venda e o ganho realizado dela
+    continuam contando para o saldo total — ver app/posicao.py."""
     conn = get_conn()
     try:
         lotes = conn.execute(
             "SELECT * FROM investimentos WHERE usuario_id = ? ORDER BY ticker, data_compra",
+            (usuario_id,),
+        ).fetchall()
+        vendas = conn.execute(
+            "SELECT * FROM vendas WHERE usuario_id = ? ORDER BY ticker, data_venda",
             (usuario_id,),
         ).fetchall()
         hoje = dt.date.today()
@@ -128,13 +134,14 @@ def listar_investimentos(usuario_id: int = Depends(usuario_id_atual)):
         por_ticker: dict[str, list] = {}
         for lote in lotes:
             por_ticker.setdefault(lote["ticker"], []).append(lote)
+        vendas_por_ticker: dict[str, list] = {}
+        for venda in vendas:
+            vendas_por_ticker.setdefault(venda["ticker"], []).append(venda)
 
         resultado = []
         for ticker, lotes_ticker in por_ticker.items():
             tipo = lotes_ticker[0]["tipo"]
-            quantidade_total = sum(l["quantidade"] for l in lotes_ticker)
-            custo_total = sum(l["quantidade"] * l["preco_medio_compra"] for l in lotes_ticker)
-            preco_medio = custo_total / quantidade_total if quantidade_total else 0
+            vendas_ticker = vendas_por_ticker.get(ticker, [])
             data_compra_mais_antiga = min(l["data_compra"] for l in lotes_ticker)
 
             cot = conn.execute(
@@ -149,12 +156,7 @@ def listar_investimentos(usuario_id: int = Depends(usuario_id_atual)):
                 "WHERE ticker = ? ORDER BY data_ex",
                 (ticker,),
             ).fetchall()
-            proventos_recebidos_total = 0.0
-            for lote in lotes_ticker:
-                por_cota_desde_compra = sum(
-                    r["valor_por_cota"] for r in proventos_rows if r["data_ex"] >= lote["data_compra"]
-                )
-                proventos_recebidos_total += por_cota_desde_compra * lote["quantidade"]
+            posicao = posicao_mod.calcular_posicao(lotes_ticker, vendas_ticker, proventos_rows, preco_atual)
 
             futuros_rows = conn.execute(
                 "SELECT data_com, data_pagamento, valor_por_cota FROM proventos_futuros "
@@ -166,36 +168,38 @@ def listar_investimentos(usuario_id: int = Depends(usuario_id_atual)):
                 if r["data_pagamento"] and inicio_mes.isoformat() <= r["data_pagamento"] <= fim_mes.isoformat()
             ]
             valor_a_receber_mes = sum(
-                r["valor_por_cota"] * quantidade_total for r in proventos_mes_atual
+                r["valor_por_cota"] * posicao["quantidade_atual"] for r in proventos_mes_atual
             )
 
-            valorizacao = None
-            valorizacao_pct = None
-            saldo_total = None
-            saldo_total_pct = None
-            if preco_atual is not None:
-                valorizacao = preco_atual * quantidade_total - custo_total
-                valorizacao_pct = (preco_atual / preco_medio - 1) * 100 if preco_medio else None
-                saldo_total = valorizacao + proventos_recebidos_total
-                saldo_total_pct = (saldo_total / custo_total * 100) if custo_total else None
+            valorizacao_pct = (
+                (preco_atual / posicao["preco_medio"] - 1) * 100
+                if preco_atual is not None and posicao["preco_medio"]
+                else None
+            )
+            saldo_total_pct = (
+                (posicao["saldo_total"] / posicao["custo_total_bruto"] * 100)
+                if posicao["saldo_total"] is not None and posicao["custo_total_bruto"]
+                else None
+            )
 
             resultado.append({
                 "ticker": ticker,
                 "tipo": tipo,
                 "nome": nome,
-                "quantidade": quantidade_total,
-                "preco_medio_compra": preco_medio,
-                "valor_investido": custo_total,
+                "quantidade": posicao["quantidade_atual"],
+                "preco_medio_compra": posicao["preco_medio"],
+                "valor_investido": posicao["custo_remanescente"],
                 "data_compra": data_compra_mais_antiga,
                 "num_compras": len(lotes_ticker),
                 "preco_atual": preco_atual,
                 "atualizado_em": atualizado_em,
-                "valorizacao": valorizacao,
+                "valorizacao": posicao["valorizacao"],
                 "valorizacao_pct": valorizacao_pct,
-                "proventos_recebidos_total": proventos_recebidos_total,
+                "proventos_recebidos_total": posicao["proventos_recebidos_total"],
+                "ganho_realizado_vendas": posicao["ganho_realizado_vendas"],
                 "proventos_a_receber_mes": valor_a_receber_mes,
                 "proventos_a_receber_detalhe": proventos_mes_atual,
-                "saldo_total": saldo_total,
+                "saldo_total": posicao["saldo_total"],
                 "saldo_total_pct": saldo_total_pct,
             })
         resultado.sort(key=lambda r: r["ticker"])
@@ -207,8 +211,7 @@ def listar_investimentos(usuario_id: int = Depends(usuario_id_atual)):
 @app.get("/api/investimentos/{ticker}/movimentacoes")
 def listar_movimentacoes(ticker: str, usuario_id: int = Depends(usuario_id_atual)):
     """Histórico de compras e vendas de um ticker, mais recente primeiro.
-    Vendas são só registro histórico — não afetam quantidade nem saldo em
-    nenhum outro lugar do app."""
+    Vendas reduzem a quantidade em posse — ver posicao.calcular_posicao."""
     ticker = ticker.upper()
     conn = get_conn()
     try:
@@ -256,15 +259,36 @@ class NovaVenda(BaseModel):
     data_venda: str
 
 
+def _quantidade_disponivel(conn, ticker: str, usuario_id: int, *, ignorar_venda_id: int | None = None) -> float:
+    """Quantidade em posse do ticker (comprada - ja vendida), usada para
+    impedir vender mais do que se tem. `ignorar_venda_id` exclui a propria
+    venda sendo editada da conta do ja-vendido."""
+    comprada = conn.execute(
+        "SELECT COALESCE(SUM(quantidade), 0) AS q FROM investimentos WHERE ticker = ? AND usuario_id = ?",
+        (ticker, usuario_id),
+    ).fetchone()["q"]
+    query_vendida = "SELECT COALESCE(SUM(quantidade), 0) AS q FROM vendas WHERE ticker = ? AND usuario_id = ?"
+    params = [ticker, usuario_id]
+    if ignorar_venda_id is not None:
+        query_vendida += " AND id != ?"
+        params.append(ignorar_venda_id)
+    vendida = conn.execute(query_vendida, params).fetchone()["q"]
+    return comprada - vendida
+
+
 @app.post("/api/investimentos/{ticker}/vendas")
 def registrar_venda(ticker: str, venda: NovaVenda, usuario_id: int = Depends(usuario_id_atual)):
     if venda.quantidade <= 0 or venda.preco_unitario <= 0:
         raise HTTPException(400, "Quantidade e preço devem ser maiores que zero")
+    ticker = ticker.upper()
     conn = get_conn()
     try:
+        disponivel = _quantidade_disponivel(conn, ticker, usuario_id)
+        if venda.quantidade > disponivel:
+            raise HTTPException(400, f"Você tem {disponivel:g} de {ticker} — não é possível vender {venda.quantidade:g}")
         cur = conn.execute(
             "INSERT INTO vendas (ticker, quantidade, preco_unitario, data_venda, usuario_id) VALUES (?, ?, ?, ?, ?)",
-            (ticker.upper(), venda.quantidade, venda.preco_unitario, venda.data_venda, usuario_id),
+            (ticker, venda.quantidade, venda.preco_unitario, venda.data_venda, usuario_id),
         )
         conn.commit()
         novo_id = cur.lastrowid
@@ -279,12 +303,20 @@ def editar_venda(venda_id: int, venda: NovaVenda, usuario_id: int = Depends(usua
         raise HTTPException(400, "Quantidade e preço devem ser maiores que zero")
     conn = get_conn()
     try:
-        cur = conn.execute(
+        atual = conn.execute(
+            "SELECT ticker FROM vendas WHERE id = ? AND usuario_id = ?", (venda_id, usuario_id)
+        ).fetchone()
+        if atual is None:
+            raise HTTPException(404, "Venda não encontrada")
+        disponivel = _quantidade_disponivel(conn, atual["ticker"], usuario_id, ignorar_venda_id=venda_id)
+        if venda.quantidade > disponivel:
+            raise HTTPException(
+                400, f"Você tem {disponivel:g} de {atual['ticker']} — não é possível vender {venda.quantidade:g}"
+            )
+        conn.execute(
             "UPDATE vendas SET quantidade = ?, preco_unitario = ?, data_venda = ? WHERE id = ? AND usuario_id = ?",
             (venda.quantidade, venda.preco_unitario, venda.data_venda, venda_id, usuario_id),
         )
-        if cur.rowcount == 0:
-            raise HTTPException(404, "Venda não encontrada")
         conn.commit()
     finally:
         conn.close()
@@ -308,6 +340,21 @@ class EdicaoInvestimento(BaseModel):
     data_compra: str
 
 
+def _checar_nao_deixa_vendas_orfas(conn, ticker: str, usuario_id: int, quantidade_bruta_apos: float) -> None:
+    """Impede editar/remover uma compra de um jeito que deixaria a
+    quantidade comprada menor que a ja vendida (venda "orfa", sem lastro)."""
+    vendida = conn.execute(
+        "SELECT COALESCE(SUM(quantidade), 0) AS q FROM vendas WHERE ticker = ? AND usuario_id = ?",
+        (ticker, usuario_id),
+    ).fetchone()["q"]
+    if quantidade_bruta_apos < vendida:
+        raise HTTPException(
+            400,
+            f"Isso deixaria {vendida:g} de {ticker} vendido sem ter sido comprado "
+            f"(só sobrariam {quantidade_bruta_apos:g}) — ajuste ou remova alguma venda primeiro.",
+        )
+
+
 @app.put("/api/investimentos/{investimento_id}")
 def editar_investimento(investimento_id: int, dados: EdicaoInvestimento, usuario_id: int = Depends(usuario_id_atual)):
     if dados.quantidade <= 0 or dados.preco_medio_compra <= 0:
@@ -315,13 +362,25 @@ def editar_investimento(investimento_id: int, dados: EdicaoInvestimento, usuario
 
     conn = get_conn()
     try:
-        cur = conn.execute(
+        atual = conn.execute(
+            "SELECT ticker, quantidade FROM investimentos WHERE id = ? AND usuario_id = ?",
+            (investimento_id, usuario_id),
+        ).fetchone()
+        if atual is None:
+            raise HTTPException(404, "Compra não encontrada")
+
+        outras_compras = conn.execute(
+            "SELECT COALESCE(SUM(quantidade), 0) AS q FROM investimentos "
+            "WHERE ticker = ? AND usuario_id = ? AND id != ?",
+            (atual["ticker"], usuario_id, investimento_id),
+        ).fetchone()["q"]
+        _checar_nao_deixa_vendas_orfas(conn, atual["ticker"], usuario_id, outras_compras + dados.quantidade)
+
+        conn.execute(
             """UPDATE investimentos SET quantidade = ?, preco_medio_compra = ?, data_compra = ?
                WHERE id = ? AND usuario_id = ?""",
             (dados.quantidade, dados.preco_medio_compra, dados.data_compra, investimento_id, usuario_id),
         )
-        if cur.rowcount == 0:
-            raise HTTPException(404, "Compra não encontrada")
         conn.commit()
     finally:
         conn.close()
@@ -358,6 +417,20 @@ def criar_investimento(inv: NovoInvestimento, usuario_id: int = Depends(usuario_
 def remover_investimento(investimento_id: int, usuario_id: int = Depends(usuario_id_atual)):
     conn = get_conn()
     try:
+        atual = conn.execute(
+            "SELECT ticker, quantidade FROM investimentos WHERE id = ? AND usuario_id = ?",
+            (investimento_id, usuario_id),
+        ).fetchone()
+        if atual is None:
+            raise HTTPException(404, "Compra não encontrada")
+
+        outras_compras = conn.execute(
+            "SELECT COALESCE(SUM(quantidade), 0) AS q FROM investimentos "
+            "WHERE ticker = ? AND usuario_id = ? AND id != ?",
+            (atual["ticker"], usuario_id, investimento_id),
+        ).fetchone()["q"]
+        _checar_nao_deixa_vendas_orfas(conn, atual["ticker"], usuario_id, outras_compras)
+
         conn.execute("DELETE FROM investimentos WHERE id = ? AND usuario_id = ?", (investimento_id, usuario_id))
         conn.commit()
     finally:

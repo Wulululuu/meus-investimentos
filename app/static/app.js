@@ -134,7 +134,12 @@ async function renderizarMovimentacoes(ticker) {
       const tr = btn.closest("tr");
       const rotulo = tr.dataset.movTipo === "Compra" ? "esta compra" : "este registro de venda";
       if (!confirm(`Remover ${rotulo}?`)) return;
-      await fetch(`/api/${tr.dataset.movEndpoint}/${tr.dataset.movId}`, { method: "DELETE" });
+      const resp = await fetch(`/api/${tr.dataset.movEndpoint}/${tr.dataset.movId}`, { method: "DELETE" });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        alert(err.detail || "Erro ao remover");
+        return;
+      }
       await renderizarMovimentacoes(ticker);
       carregarInvestimentos();
     });
@@ -181,7 +186,8 @@ function abrirEdicaoMovimentacao(mov, ticker) {
       body: JSON.stringify(dados),
     });
     if (!resp.ok) {
-      alert("Erro ao salvar");
+      const err = await resp.json().catch(() => ({}));
+      alert(err.detail || "Erro ao salvar");
       return;
     }
     await renderizarMovimentacoes(ticker);

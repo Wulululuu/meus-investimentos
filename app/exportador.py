@@ -13,6 +13,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Font
 
 from .database import get_conn
+from . import posicao as posicao_mod
 
 
 def _cabecalho(ws, colunas: list[str]) -> None:
@@ -48,6 +49,9 @@ def exportar_carteira(usuario_id: int) -> bytes:
     por_ticker: dict[str, list] = {}
     for lote in lotes:
         por_ticker.setdefault(lote["ticker"], []).append(lote)
+    vendas_por_ticker: dict[str, list] = {}
+    for venda in vendas:
+        vendas_por_ticker.setdefault(venda["ticker"], []).append(venda)
 
     wb = Workbook()
 
@@ -55,29 +59,20 @@ def exportar_carteira(usuario_id: int) -> bytes:
     ws_posicoes.title = "Posições"
     _cabecalho(ws_posicoes, [
         "Ticker", "Tipo", "Quantidade", "Preço médio", "Valor investido",
-        "Preço atual", "Valorização", "Proventos recebidos", "Saldo total",
+        "Preço atual", "Valorização", "Proventos recebidos", "Ganho/perda em vendas", "Saldo total",
     ])
     for ticker, lotes_ticker in sorted(por_ticker.items()):
         tipo = lotes_ticker[0]["tipo"]
-        quantidade = sum(l["quantidade"] for l in lotes_ticker)
-        custo_total = sum(l["quantidade"] * l["preco_medio_compra"] for l in lotes_ticker)
-        preco_medio = custo_total / quantidade if quantidade else 0
         cot = cotacoes.get(ticker)
         preco_atual = cot["preco_atual"] if cot else None
-
         prov_ticker = [p for p in proventos if p["ticker"] == ticker]
-        proventos_total = 0.0
-        for lote in lotes_ticker:
-            proventos_total += sum(
-                p["valor_por_cota"] for p in prov_ticker if p["data_ex"] >= lote["data_compra"]
-            ) * lote["quantidade"]
 
-        valorizacao = (preco_atual * quantidade - custo_total) if preco_atual is not None else None
-        saldo_total = (valorizacao + proventos_total) if valorizacao is not None else None
+        pos = posicao_mod.calcular_posicao(lotes_ticker, vendas_por_ticker.get(ticker, []), prov_ticker, preco_atual)
 
         ws_posicoes.append([
-            ticker, tipo, quantidade, round(preco_medio, 4), round(custo_total, 2),
-            preco_atual, valorizacao, round(proventos_total, 2), saldo_total,
+            ticker, tipo, pos["quantidade_atual"], round(pos["preco_medio"], 4), round(pos["custo_remanescente"], 2),
+            preco_atual, pos["valorizacao"], round(pos["proventos_recebidos_total"], 2),
+            round(pos["ganho_realizado_vendas"], 2), pos["saldo_total"],
         ])
 
     ws_compras = wb.create_sheet("Compras")

@@ -75,12 +75,13 @@ pode ser editada (ícone de lápis) ou removida. Se a lista for longa, a janela
 rola verticalmente — ela nunca fica mais larga que a tela.
 
 No canto superior direito, **"Registrar entrada"** adiciona uma compra e
-**"Registrar saída"** registra uma venda (ambos pedem o ticker). Importante:
-**vendas são só registro** — ao contrário das compras, elas **não alteram**
-a quantidade possuída, a valorização, os proventos nem o saldo total
-mostrados em nenhum outro lugar do app. Servem para você manter um diário de
-negociações (útil, por exemplo, pra apuração de imposto de renda mais pra
-frente), sem que o app tente recalcular sua posição sozinho.
+**"Registrar saída"** registra uma venda (ambos pedem o ticker). Uma venda
+**reduz a quantidade possuída** (usando o preço médio de compra como custo,
+método de apuração usado no Brasil para IR sobre renda variável) — mas os
+proventos recebidos até a data da venda e o ganho ou perda dela continuam
+contando no saldo total, mesmo depois que o ativo for totalmente vendido. O
+app impede vender mais do que você tem, ou editar/remover uma compra de um
+jeito que deixaria uma venda sem lastro.
 
 ## Aba "Patrimônio"
 
