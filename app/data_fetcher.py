@@ -19,6 +19,16 @@ import requests
 log = logging.getLogger("data_fetcher")
 
 _HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) InvestimentosApp/1.0"}
+# a StatusInvest parece filtrar por um cabecalho de navegador "de verdade" —
+# usa um conjunto proprio (nao reaproveita _HEADERS) pra nao arriscar quebrar
+# a chamada ao Yahoo Finance, que ja funciona bem com o cabecalho simples acima
+_HEADERS_STATUSINVEST = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                  "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "Accept": "application/json, text/plain, */*",
+    "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
+    "Referer": "https://statusinvest.com.br/",
+}
 _TIMEOUT = 15
 
 _TIPO_PARA_PATH = {
@@ -78,11 +88,15 @@ def buscar_preco_historico_e_proventos_pagos(ticker: str) -> DadosAtivo:
     return dados
 
 
-def buscar_proventos_futuros(ticker: str, tipo: str) -> list[tuple[str, str, float]]:
+def buscar_proventos_futuros(ticker: str, tipo: str) -> list[tuple[str, str, float]] | None:
     """Retorna proventos ANUNCIADOS com pagamento ainda nao realizado.
 
     Cada item: (data_com 'YYYY-MM-DD', data_pagamento 'YYYY-MM-DD' ou '', valor_por_cota).
-    Lista vazia se a fonte falhar ou o tipo de ativo nao for suportado pela StatusInvest.
+    Lista vazia se o tipo de ativo nao e' suportado pela StatusInvest, ou se a
+    busca funcionou mas realmente nao ha nada anunciado agora. `None` especifi-
+    camente quando a BUSCA FALHOU (rede, bloqueio, resposta inesperada) — nesse
+    caso o chamador nao deve apagar o que ja tinha, so' porque nao conseguiu
+    confirmar dados novos.
     """
     path = _TIPO_PARA_PATH.get(tipo)
     if not path:
@@ -91,16 +105,16 @@ def buscar_proventos_futuros(ticker: str, tipo: str) -> list[tuple[str, str, flo
     url = f"https://statusinvest.com.br/{path}/companytickerprovents"
     params = {"ticker": ticker, "chartProventsType": 2 if path in ("acao", "etf", "bdr") else 1}
     try:
-        resp = requests.get(url, params=params, headers=_HEADERS, timeout=_TIMEOUT)
+        resp = requests.get(url, params=params, headers=_HEADERS_STATUSINVEST, timeout=_TIMEOUT)
         resp.raise_for_status()
         payload = resp.json()
         if not payload:
             log.warning("StatusInvest respondeu vazio para %s (%s)", ticker, path)
-            return []
+            return None
         modelos = payload.get("assetEarningsModels") or []
     except Exception as exc:
         log.warning("Falha ao buscar proventos futuros de %s na StatusInvest: %s", ticker, exc)
-        return []
+        return None
 
     hoje = dt.date.today()
     futuros = []

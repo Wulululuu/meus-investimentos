@@ -80,16 +80,22 @@ def atualizar_ticker(ticker: str, tipo: str) -> str | None:
             [(ticker, data, valor) for data, valor in dados.proventos_pagos],
         )
 
-        conn.execute("DELETE FROM proventos_futuros WHERE ticker = ?", (ticker,))
-        conn.executemany(
-            """INSERT INTO proventos_futuros (ticker, data_com, data_pagamento, valor_por_cota, atualizado_em)
-               VALUES (?, ?, ?, ?, ?)""",
-            [(ticker, com, pgto, valor, agora) for com, pgto, valor in futuros],
-        )
+        if futuros is None:
+            # busca falhou (rede, bloqueio etc) — mantem o que ja estava
+            # gravado em vez de apagar por causa de uma falha temporaria
+            resumo_futuros = "preservados (busca falhou)"
+        else:
+            conn.execute("DELETE FROM proventos_futuros WHERE ticker = ?", (ticker,))
+            conn.executemany(
+                """INSERT INTO proventos_futuros (ticker, data_com, data_pagamento, valor_por_cota, atualizado_em)
+                   VALUES (?, ?, ?, ?, ?)""",
+                [(ticker, com, pgto, valor, agora) for com, pgto, valor in futuros],
+            )
+            resumo_futuros = f"{len(futuros)} proventos futuros"
 
         conn.commit()
-        log.info("Atualizado %s: preco=%s, %d pontos historico, %d proventos futuros",
-                  ticker, dados.preco_atual, len(dados.historico), len(futuros))
+        log.info("Atualizado %s: preco=%s, %d pontos historico, %s",
+                  ticker, dados.preco_atual, len(dados.historico), resumo_futuros)
         return None
     except Exception as exc:
         # Uma falha (ex: instabilidade de conexao no meio das varias
