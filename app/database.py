@@ -19,9 +19,12 @@ continue usando `linha["coluna"]` sem precisar mudar uma linha sequer.
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 
 import libsql
+
+_TAMANHO_LOTE_EXECUTEMANY = 300
 
 DB_PATH = Path(__file__).resolve().parent.parent / "investimentos.db"
 
@@ -153,7 +156,37 @@ class _ConexaoCompat:
         return _CursorCompat(self._conn.execute(sql, parametros))
 
     def executemany(self, sql: str, sequencia_parametros) -> None:
-        self._conn.executemany(sql, list(sequencia_parametros))
+        """Insere varias linhas de uma vez.
+
+        Contra o Turso remoto, a `executemany` original do `libsql` manda uma
+        requisicao de rede POR LINHA — pra algumas centenas de linhas (ex:
+        historico de precos), isso demora minutos e chega a estourar o tempo
+        limite da sessao no meio do caminho ("stream not found"). Em vez
+        disso, reescreve o SQL pra inserir varias linhas numa unica
+        instrucao (`VALUES (?,?,?),(?,?,?),...`), em lotes — o mesmo truque
+        ja usado na migracao inicial pro Turso.
+        """
+        linhas = list(sequencia_parametros)
+        if not linhas:
+            return
+
+        match = re.search(r"VALUES\s*(\([^)]*\))", sql, re.IGNORECASE)
+        if not match:
+            # SQL num formato que nao sabemos reescrever em lote — cai pro
+            # caminho lento (uma linha por vez), mas continua correto.
+            for parametros in linhas:
+                self._conn.execute(sql, parametros)
+            return
+
+        marcador = match.group(1)
+        prefixo = sql[: match.start(1)]
+        sufixo = sql[match.end(1):]
+
+        for inicio in range(0, len(linhas), _TAMANHO_LOTE_EXECUTEMANY):
+            lote = linhas[inicio : inicio + _TAMANHO_LOTE_EXECUTEMANY]
+            sql_lote = prefixo + ", ".join([marcador] * len(lote)) + sufixo
+            parametros_lote = [valor for linha in lote for valor in linha]
+            self._conn.execute(sql_lote, parametros_lote)
 
     def executescript(self, script: str) -> None:
         self._conn.executescript(script)

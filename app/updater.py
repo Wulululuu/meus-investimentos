@@ -39,15 +39,25 @@ def tickers_cadastrados() -> list[tuple[str, str]]:
 
 
 def atualizar_ticker(ticker: str, tipo: str) -> str | None:
-    """Busca e persiste os dados de um ticker. Retorna mensagem de erro (ou None)."""
+    """Busca e persiste os dados de um ticker. Retorna mensagem de erro (ou None).
+
+    As duas buscas de rede (Yahoo Finance e StatusInvest) rodam ANTES de abrir
+    a conexao com o banco, e so' depois vem todas as gravacoes, uma atras da
+    outra. Contra o Turso remoto, uma conexao que fica aberta por muito tempo
+    (ex: enquanto espera uma chamada de rede lenta no meio do caminho) corre
+    risco de expirar antes da ultima instrucao rodar ("stream not found") —
+    manter a conexao aberta pelo menor tempo possivel evita isso.
+    """
     dados = data_fetcher.buscar_preco_historico_e_proventos_pagos(ticker)
+    if dados.erro:
+        log.warning("Erro ao atualizar %s: %s", ticker, dados.erro)
+        return dados.erro
+
+    futuros = data_fetcher.buscar_proventos_futuros(ticker, tipo)
+    agora = dt.datetime.now().isoformat(timespec="seconds")
+
     conn = get_conn()
     try:
-        if dados.erro:
-            log.warning("Erro ao atualizar %s: %s", ticker, dados.erro)
-            return dados.erro
-
-        agora = dt.datetime.now().isoformat(timespec="seconds")
         conn.execute(
             """INSERT INTO cotacoes_atuais (ticker, nome_curto, preco_atual, atualizado_em)
                VALUES (?, ?, ?, ?)
@@ -70,7 +80,6 @@ def atualizar_ticker(ticker: str, tipo: str) -> str | None:
             [(ticker, data, valor) for data, valor in dados.proventos_pagos],
         )
 
-        futuros = data_fetcher.buscar_proventos_futuros(ticker, tipo)
         conn.execute("DELETE FROM proventos_futuros WHERE ticker = ?", (ticker,))
         conn.executemany(
             """INSERT INTO proventos_futuros (ticker, data_com, data_pagamento, valor_por_cota, atualizado_em)
@@ -82,6 +91,12 @@ def atualizar_ticker(ticker: str, tipo: str) -> str | None:
         log.info("Atualizado %s: preco=%s, %d pontos historico, %d proventos futuros",
                   ticker, dados.preco_atual, len(dados.historico), len(futuros))
         return None
+    except Exception as exc:
+        # Uma falha (ex: instabilidade de conexao no meio das varias
+        # operacoes deste ticker) nao pode derrubar a atualizacao dos
+        # tickers seguintes — melhor reportar esse como erro e seguir.
+        log.exception("Falha ao gravar dados de %s", ticker)
+        return str(exc)
     finally:
         conn.close()
 
