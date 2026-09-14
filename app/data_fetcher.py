@@ -11,9 +11,12 @@ Fontes:
 from __future__ import annotations
 
 import datetime as dt
+import logging
 from dataclasses import dataclass, field
 
 import requests
+
+log = logging.getLogger("data_fetcher")
 
 _HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) InvestimentosApp/1.0"}
 _TIMEOUT = 15
@@ -92,9 +95,11 @@ def buscar_proventos_futuros(ticker: str, tipo: str) -> list[tuple[str, str, flo
         resp.raise_for_status()
         payload = resp.json()
         if not payload:
+            log.warning("StatusInvest respondeu vazio para %s (%s)", ticker, path)
             return []
         modelos = payload.get("assetEarningsModels") or []
-    except Exception:
+    except Exception as exc:
+        log.warning("Falha ao buscar proventos futuros de %s na StatusInvest: %s", ticker, exc)
         return []
 
     hoje = dt.date.today()
